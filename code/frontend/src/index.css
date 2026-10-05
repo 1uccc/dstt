@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --color-green-primary: #16a34a;
+  --color-green-light: #22c55e;
+  --color-green-dark: #14532d;
+  --color-green-muted: #dcfce7;
+  --color-amber-accent: #f59e0b;
+  --color-surface: #f8faf8;
+
+  --font-display: 'Barlow Condensed', sans-serif;
+  --font-body: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: #d1d5db transparent;
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background-color: #f8faf8;
+  color: #111827;
+}
