@@ -1,82 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 
-const FEATURED_FIELDS = [
-  {
-    id: 1,
-    name: 'Sân Bóng Đá Phú Thọ',
-    location: 'Quận 11, TP.HCM',
-    sport: 'Bóng đá',
-    rating: 4.8,
-    reviews: 124,
-    price: 350000,
-    image: 'https://images.unsplash.com/photo-1551854838-212c50b4c184?w=600&h=400&fit=crop&auto=format',
-    badge: 'Nổi bật',
-    badgeColor: 'bg-amber-500',
-  },
-  {
-    id: 2,
-    name: 'Tennis Center Thảo Điền',
-    location: 'Quận 2, TP.HCM',
-    sport: 'Tennis',
-    rating: 4.9,
-    reviews: 89,
-    price: 280000,
-    image: 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=600&h=400&fit=crop&auto=format',
-    badge: 'Top rated',
-    badgeColor: 'bg-green-600',
-  },
-  {
-    id: 3,
-    name: 'Cầu Lông SportZone',
-    location: 'Bình Thạnh, TP.HCM',
-    sport: 'Cầu lông',
-    rating: 4.7,
-    reviews: 56,
-    price: 150000,
-    image: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=600&h=400&fit=crop&auto=format',
-    badge: '',
-    badgeColor: '',
-  },
-  {
-    id: 4,
-    name: 'Sân Bóng Rổ Landmark',
-    location: 'Quận 1, TP.HCM',
-    sport: 'Bóng rổ',
-    rating: 4.6,
-    reviews: 43,
-    price: 200000,
-    image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=600&h=400&fit=crop&auto=format',
-    badge: 'Mới',
-    badgeColor: 'bg-blue-600',
-  },
-  {
-    id: 5,
-    name: 'Sân 7 Người Hòa Bình',
-    location: 'Gò Vấp, TP.HCM',
-    sport: 'Bóng đá',
-    rating: 4.5,
-    reviews: 201,
-    price: 420000,
-    image: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=600&h=400&fit=crop&auto=format',
-    badge: '',
-    badgeColor: '',
-  },
-  {
-    id: 6,
-    name: 'Sân Pickleball Sky Garden',
-    location: 'Phú Nhuận, TP.HCM',
-    sport: 'Pickleball',
-    rating: 4.9,
-    reviews: 31,
-    price: 180000,
-    image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&h=400&fit=crop&auto=format',
-    badge: 'Hot',
-    badgeColor: 'bg-red-500',
-  },
-];
 
 const SPORT_TYPES = ['Tất cả', 'Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball'];
+
+const PROVINCES = ['An Giang', 'Bà Rịa - Vũng Tàu', 'Bạc Liêu', 'Bắc Giang', 'Bắc Kạn', 'Bắc Ninh', 'Bến Tre', 'Bình Dương', 'Bình Định', 'Bình Phước', 'Bình Thuận', 'Cà Mau', 'Cao Bằng', 'Cần Thơ', 'Đà Nẵng', 'Đắk Lắk', 'Đắk Nông', 'Điện Biên', 'Đồng Nai', 'Đồng Tháp', 'Gia Lai', 'Hà Giang', 'Hà Nam', 'Hà Nội', 'Hà Tĩnh', 'Hải Dương', 'Hải Phòng', 'Hậu Giang', 'Hòa Bình', 'Hưng Yên', 'Khánh Hòa', 'Kiên Giang', 'Kon Tum', 'Lai Châu', 'Lạng Sơn', 'Lào Cai', 'Lâm Đồng', 'Long An', 'Nam Định', 'Nghệ An', 'Ninh Bình', 'Ninh Thuận', 'Phú Thọ', 'Phú Yên', 'Quảng Bình', 'Quảng Nam', 'Quảng Ngãi', 'Quảng Ninh', 'Quảng Trị', 'Sóc Trăng', 'Sơn La', 'Tây Ninh', 'Thái Bình', 'Thái Nguyên', 'Thanh Hóa', 'Thừa Thiên Huế', 'Tiền Giang', 'TP.HCM', 'Trà Vinh', 'Tuyên Quang', 'Vĩnh Long', 'Vĩnh Phúc', 'Yên Bái'];
 
 const STATS = [
   { value: '500+', label: 'Sân thể thao' },
@@ -87,17 +15,33 @@ const STATS = [
 
 export function Home() {
   const navigate = useNavigate();
-  const [location, setLocation] = useState('');
+  const [locationStr, setLocationStr] = useState('');
   const [sport, setSport] = useState('Bóng đá');
   const [date, setDate] = useState('');
   const [activeSport, setActiveSport] = useState('Tất cả');
+  const [fields, setFields] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchFields = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/fields');
+        if (res.ok) {
+          const data = await res.json();
+          setFields(data.filter((f: any) => f.active));
+        }
+      } catch (err) {
+        console.error('Lỗi lấy danh sách sân:', err);
+      }
+    };
+    fetchFields();
+  }, []);
 
   const filteredFields = activeSport === 'Tất cả'
-    ? FEATURED_FIELDS
-    : FEATURED_FIELDS.filter(f => f.sport === activeSport);
+    ? fields
+    : fields.filter(f => f.sport === activeSport);
 
   const handleSearch = () => {
-    navigate(`/search?location=${location}&sport=${sport}&date=${date}`);
+    navigate(`/search?location=${locationStr}&sport=${sport}&date=${date}`);
   };
 
   return (
@@ -135,13 +79,16 @@ export function Home() {
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">Địa điểm</label>
                 <div className="relative">
                   <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                  <input
-                    type="text"
-                    placeholder="Quận 1, TP.HCM"
-                    value={location}
-                    onChange={e => setLocation(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
+                  <select
+                    value={locationStr}
+                    onChange={e => setLocationStr(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white"
+                  >
+                    <option value="">Toàn quốc</option>
+                    {PROVINCES.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="flex flex-col gap-1">
@@ -228,10 +175,10 @@ export function Home() {
           {filteredFields.map(field => (
             <div
               key={field.id}
-              className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg border border-gray-100 transition-all hover:-translate-y-1 group cursor-pointer"
+              className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg border border-gray-100 transition-all hover:-translate-y-1 group cursor-pointer flex flex-col h-full"
               onClick={() => navigate(`/field/${field.id}`)}
             >
-              <div className="relative h-52 bg-gray-100 overflow-hidden">
+              <div className="relative h-52 shrink-0 bg-gray-100 overflow-hidden">
                 <img
                   src={field.image}
                   alt={field.name}
@@ -246,25 +193,25 @@ export function Home() {
                   <svg className="w-4 h-4 text-gray-500 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                 </button>
               </div>
-              <div className="p-4">
+              <div className="p-4 flex-1 flex flex-col">
                 <div className="flex items-start justify-between mb-1">
                   <h3 className="font-semibold text-gray-900 text-base leading-tight">{field.name}</h3>
                 </div>
-                <div className="flex items-center gap-1 text-gray-500 text-sm mb-3">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
-                  {field.location}
+                <div className="flex items-start gap-1 text-gray-500 text-sm mb-3">
+                  <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
+                  <span className="line-clamp-2">{field.location}</span>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mt-auto">
                   <div className="flex items-center gap-1">
                     <div className="flex items-center gap-0.5">
                       {[1,2,3,4,5].map(i => (
-                        <svg key={i} className={`w-3.5 h-3.5 ${i <= Math.floor(field.rating) ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                        <svg key={i} className={`w-3.5 h-3.5 ${i <= Math.floor(field.rating || 0) ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
                       ))}
                     </div>
-                    <span className="text-xs text-gray-500">({field.reviews})</span>
+                    <span className="text-xs text-gray-500">({field.reviews || 0})</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-green-600 font-bold text-base">{field.price.toLocaleString('vi-VN')}đ</span>
+                    <span className="text-green-600 font-bold text-base">{(field.price || 0).toLocaleString('vi-VN')}đ</span>
                     <span className="text-gray-400 text-xs">/giờ</span>
                   </div>
                 </div>

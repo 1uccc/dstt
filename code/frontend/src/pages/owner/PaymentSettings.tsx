@@ -43,19 +43,34 @@ export function OwnerPaymentSettings() {
   const [enabledMethods, setEnabledMethods] = useState(savedSettings?.enabledMethods ?? PAYMENT_METHODS.map((method) => method.id));
   const [qrCodes, setQrCodes] = useState<Record<string, string>>(savedSettings?.qrCodes ?? {});
 
-  const handleQrUpload = (methodId: string, event: ChangeEvent<HTMLInputElement>) => {
+  const handleQrUpload = async (methodId: string, event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
       alert('Ảnh QR cần nhỏ hơn 2MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setQrCodes((current) => ({ ...current, [methodId]: String(reader.result) }));
-      setSaved(false);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'datsanthethao');
+      
+      const res = await fetch('https://api.cloudinary.com/v1_1/vafqskfg/image/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await res.json();
+      if (data.secure_url) {
+        setQrCodes((current) => ({ ...current, [methodId]: data.secure_url }));
+        setSaved(false);
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (err) {
+      console.error('Lỗi upload mã QR:', err);
+      alert('Không thể tải ảnh lên. Vui lòng thử lại.');
+    }
   };
 
   const save = () => {

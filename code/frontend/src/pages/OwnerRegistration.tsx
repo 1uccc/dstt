@@ -1,5 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../config/firebase';
 
 const STEPS = [
   { number: 1, title: 'Tài khoản', detail: 'Thông tin người đại diện' },
@@ -118,6 +120,7 @@ export function OwnerRegistration() {
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const update = <K extends keyof FormData>(key: K, value: FormData[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -142,16 +145,75 @@ export function OwnerRegistration() {
     return true;
   };
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!validateStep()) return;
+    
     if (step < STEPS.length - 1) {
       setStep((current) => current + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    setSubmitted(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const user = userCredential.user;
+      const token = await user.getIdToken();
+      
+      const res = await fetch('http://localhost:5000/api/auth/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          email: form.email,
+          fullName: form.fullName,
+          role: 'owner',
+          phone: form.phone,
+          businessInfo: {
+            businessName: form.businessName,
+            taxCode: form.taxCode,
+            city: form.city,
+            district: form.district,
+            address: form.address,
+          },
+          fieldInfo: {
+            venueName: form.venueName,
+            venueAddress: form.venueAddress,
+            mapUrl: form.mapUrl,
+            sport: form.sport,
+            fieldCount: form.fieldCount,
+            openTime: form.openTime,
+            closeTime: form.closeTime,
+            slotMinutes: form.slotMinutes,
+            regularPrice: form.regularPrice,
+            peakPrice: form.peakPrice,
+            peakStart: form.peakStart,
+            operatingDays: form.operatingDays,
+            amenities: form.amenities,
+          }
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('Lỗi đồng bộ dữ liệu với server');
+      }
+
+      setSubmitted(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err: any) {
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Email này đã được đăng ký. Vui lòng đăng nhập.');
+      } else {
+        setError(err.message || 'Đã xảy ra lỗi.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleAmenity = (amenity: string) => {
@@ -403,9 +465,9 @@ export function OwnerRegistration() {
                   <span aria-hidden="true">←</span> Quay lại
                 </button>
               ) : <span />}
-              <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-green-600/20 transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500/20">
-                {step === STEPS.length - 1 ? 'Gửi hồ sơ đăng ký' : 'Tiếp tục'}
-                <span aria-hidden="true">→</span>
+              <button type="submit" disabled={loading} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-green-600/20 transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500/20 disabled:opacity-50">
+                {loading ? 'Đang xử lý...' : (step === STEPS.length - 1 ? 'Gửi hồ sơ đăng ký' : 'Tiếp tục')}
+                {!loading && <span aria-hidden="true">→</span>}
               </button>
             </div>
           </form>

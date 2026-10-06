@@ -1,31 +1,35 @@
-const Booking = require('../models/Booking');
-const Field = require('../models/Field');
+const { db } = require('../config/firebase');
 
 // [Tạo Booking mới] (Khách hàng)
 exports.createBooking = async (req, res) => {
   try {
     const { customerName, phone, fieldId, date, time, amount, paymentMethod, reference } = req.body;
     
-    const field = await Field.findById(fieldId);
-    if (!field) return res.status(404).json({ message: 'Sân không tồn tại' });
+    const fieldRef = db.collection('fields').doc(fieldId);
+    const fieldDoc = await fieldRef.get();
+    if (!fieldDoc.exists) return res.status(404).json({ message: 'Sân không tồn tại' });
+    const fieldData = fieldDoc.data();
 
     // Tạo mã đơn ngẫu nhiên SPB-XXXX
     const bookingCode = `SPB-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const newBooking = new Booking({
+    const newBooking = {
       bookingCode, customerName, phone, 
-      fieldId: field._id, fieldName: field.name,
+      fieldId: fieldId, fieldName: fieldData.name,
       date, time, amount, paymentMethod, reference,
-      userId: req.user ? req.user.userId : null
-    });
+      userId: req.user ? req.user.uid : null,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
 
-    await newBooking.save();
+    const bookingRef = await db.collection('bookings').add(newBooking);
 
     // Tăng số lượng booking cho sân
-    field.bookings += 1;
-    await field.save();
+    await fieldRef.update({
+      bookings: (fieldData.bookings || 0) + 1
+    });
 
-    res.status(201).json({ message: 'Đặt sân thành công', booking: newBooking });
+    res.status(201).json({ message: 'Đặt sân thành công', booking: { id: bookingRef.id, ...newBooking } });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi khi đặt sân', error: error.message });
   }
@@ -34,15 +38,28 @@ exports.createBooking = async (req, res) => {
 // [Lấy danh sách Booking] (Cho Admin/Owner)
 exports.getAllBookings = async (req, res) => {
   try {
-    let filter = {};
+    let query = db.collection('bookings');
+    
     // Nếu là chủ sân, chỉ lấy đơn của sân họ
     if (req.user && req.user.role === 'owner') {
-      const ownerFields = await Field.find({ owner: req.user.userId }).select('_id');
-      const ownerFieldIds = ownerFields.map(f => f._id);
-      filter = { fieldId: { $in: ownerFieldIds } };
+      const ownerFieldsSnapshot = await db.collection('fields').where('owner', '==', req.user.uid).get();
+      const ownerFieldIds = ownerFieldsSnapshot.docs.map(doc => doc.id);
+      
+      if (ownerFieldIds.length > 0) {
+        query = query.where('fieldId', 'in', ownerFieldIds);
+      } else {
+         return res.json([]); // Không có sân nào, trả về rỗng
+      }
+    } else if (req.user && req.user.role === 'customer') {
+      // Nếu là khách hàng, lấy danh sách sân đã đặt
+      query = query.where('userId', '==', req.user.uid);
     }
 
-    const bookings = await Booking.find(filter).sort({ createdAt: -1 });
+    const snapshot = await query.get();
+    const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Sắp xếp giảm dần theo thời gian tạo
+    bookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
     res.json(bookings);
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
@@ -55,10 +72,10 @@ exports.updateBookingStatus = async (req, res) => {
     const { status } = req.body;
     const bookingId = req.params.id;
 
-    const updated = await Booking.findByIdAndUpdate(bookingId, { status }, { new: true });
-    if (!updated) return res.status(404).json({ message: 'Không tìm thấy đơn.' });
-
-    res.json({ message: 'Cập nhật trạng thái thành công', booking: updated });
+    const bookingRef = db.collection('bookings').doc(bookingId);
+    await bookingRef.update({ status, updatedAt: new Date().toISOString() });
+    
+    res.json({ message: 'Cập nhật trạng thái thành công', bookingId, status });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi khi cập nhật', error: error.message });
   }

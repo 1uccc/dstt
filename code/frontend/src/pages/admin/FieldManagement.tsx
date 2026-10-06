@@ -1,19 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router';
+import { auth } from '../../config/firebase';
 
 interface Field {
-  id: number;
+  id: string;
   name: string;
-  location: string;
+  location?: string;
+  address?: string;
   sport: string;
   price: number;
-  active: boolean;
-  image: string;
+  description?: string;
+  image?: string;
+  images?: string[];
   bookings: number;
-  mapUrl: string;
+  mapUrl?: string;
   amenities: string[];
-  schedule: FieldSchedule;
-  ownerName: string;
+  schedule?: FieldSchedule;
+  ownerName?: string;
+  owner?: string; // owner uid
 }
 
 interface FieldSchedule {
@@ -37,30 +41,40 @@ const createSchedule = (): FieldSchedule => ({
   blockedDates: [],
 });
 
-const INITIAL_FIELDS: Field[] = ([
-  { id: 1, name: 'Sân Bóng Đá Phú Thọ', location: 'Quận 11, TP.HCM', sport: 'Bóng đá', price: 350000, active: true, image: 'https://images.unsplash.com/photo-1551854838-212c50b4c184?w=80&h=60&fit=crop&auto=format', bookings: 124, mapUrl: 'https://maps.google.com/?q=Nhà+thi+đấu+Phú+Thọ', ownerName: 'Phú Thọ Sports' },
-  { id: 2, name: 'Tennis Center Thảo Điền', location: 'Quận 2, TP.HCM', sport: 'Tennis', price: 280000, active: true, image: 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=80&h=60&fit=crop&auto=format', bookings: 89, mapUrl: 'https://maps.google.com/?q=Thảo+Điền', ownerName: 'Thảo Điền Tennis' },
-  { id: 3, name: 'Cầu Lông SportZone', location: 'Bình Thạnh, TP.HCM', sport: 'Cầu lông', price: 150000, active: true, image: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=80&h=60&fit=crop&auto=format', bookings: 56, mapUrl: '', ownerName: 'SportZone Việt Nam' },
-  { id: 4, name: 'Sân Bóng Rổ Landmark', location: 'Quận 1, TP.HCM', sport: 'Bóng rổ', price: 200000, active: false, image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=80&h=60&fit=crop&auto=format', bookings: 43, mapUrl: '', ownerName: 'Landmark Sports' },
-  { id: 5, name: 'Sân 7 Người Hòa Bình', location: 'Gò Vấp, TP.HCM', sport: 'Bóng đá', price: 420000, active: true, image: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=80&h=60&fit=crop&auto=format', bookings: 201, mapUrl: '', ownerName: 'Phú Thọ Sports' },
-  { id: 6, name: 'Sân Pickleball Sky Garden', location: 'Phú Nhuận, TP.HCM', sport: 'Pickleball', price: 180000, active: true, image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=80&h=60&fit=crop&auto=format', bookings: 31, mapUrl: '', ownerName: 'Phú Thọ Sports' },
-] as Array<Omit<Field, 'amenities' | 'schedule'>>).map((field) => ({
-  ...field,
-  amenities: ['Bãi đỗ xe', 'Đèn chiếu sáng', 'Phòng thay đồ & tắm'],
-  schedule: { ...createSchedule(), regularPrice: field.price, peakPrice: Math.round(field.price * 1.25) },
-}));
-
 const SPORT_OPTIONS = ['Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball'];
 
 export function FieldManagement() {
   const location = useLocation();
   const isOwnerPortal = location.pathname.startsWith('/owner');
-  const currentOwner = 'Phú Thọ Sports';
-  const [fields, setFields] = useState<Field[]>(INITIAL_FIELDS);
+  const [fields, setFields] = useState<Field[]>([]);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [editField, setEditField] = useState<Field | null>(null);
+  const [currentUid, setCurrentUid] = useState<string>('');
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) setCurrentUid(user.uid);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const fetchFields = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/fields');
+      if (res.ok) {
+        const data = await res.json();
+        setFields(data);
+      }
+    } catch (err) {
+      console.error('Lỗi lấy danh sách sân:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchFields();
+  }, []);
 
   // New field form state
   const emptyForm = () => ({
@@ -68,9 +82,11 @@ export function FieldManagement() {
     location: '',
     sport: 'Bóng đá',
     price: '',
+    description: '',
     image: '',
+    images: [] as string[],
     mapUrl: '',
-    ownerName: isOwnerPortal ? currentOwner : 'Phú Thọ Sports',
+    ownerName: '',
     amenities: [] as string[],
     schedule: createSchedule(),
   });
@@ -85,18 +101,6 @@ export function FieldManagement() {
   };
   const selectedAmenities = form.amenities ?? [];
 
-  const persistSchedule = (fieldName: string, schedule: FieldSchedule) => {
-    try {
-      const raw = localStorage.getItem('sportbook-owner-schedule');
-      const parsed = raw ? JSON.parse(raw) : {};
-      const schedules = parsed.days ? { [parsed.field]: parsed } : parsed;
-      schedules[fieldName] = { field: fieldName, ...schedule };
-      localStorage.setItem('sportbook-owner-schedule', JSON.stringify(schedules));
-    } catch {
-      localStorage.setItem('sportbook-owner-schedule', JSON.stringify({ [fieldName]: { field: fieldName, ...schedule } }));
-    }
-  };
-
   const updateScheduleDay = (index: number, update: Partial<FieldSchedule['days'][number]>) => {
     setForm((current) => {
       const schedule = current.schedule ?? createSchedule();
@@ -110,71 +114,105 @@ export function FieldManagement() {
     });
   };
 
-  const scopedFields = isOwnerPortal ? fields.filter((field) => field.ownerName === currentOwner) : fields;
+  const scopedFields = (isOwnerPortal && currentUid) ? fields.filter((field) => field.owner === currentUid) : fields;
   const filtered = scopedFields.filter(f =>
-    f.name.toLowerCase().includes(search.toLowerCase()) ||
-    f.location.toLowerCase().includes(search.toLowerCase()) ||
-    f.ownerName.toLowerCase().includes(search.toLowerCase())
+    (f.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (f.location || f.address || '').toLowerCase().includes(search.toLowerCase()) ||
+    (f.ownerName || '').toLowerCase().includes(search.toLowerCase())
   );
 
-  const toggleActive = (id: number) => {
-    setFields(prev => prev.map(f => f.id === id ? { ...f, active: !f.active } : f));
+  const toggleActive = async (id: string) => {
+    const field = fields.find(f => f.id === id);
+    if (!field) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/fields/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ active: !field.active })
+      });
+      if (res.ok) setFields(prev => prev.map(f => f.id === id ? { ...f, active: !field.active } : f));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const deleteField = (id: number) => {
-    setFields(prev => prev.filter(f => f.id !== id));
-    setShowDeleteConfirm(null);
+  const deleteField = async (id: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/fields/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setFields(prev => prev.filter(f => f.id !== id));
+        setShowDeleteConfirm(null);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editField) {
-      setFields(prev => prev.map(f => f.id === editField.id ? {
-        ...f,
+    try {
+      const token = localStorage.getItem('token');
+      const payload = {
         name: form.name,
         location: form.location,
+        address: form.location, // support both fields
         sport: form.sport,
         price: Number(form.price),
+        description: form.description,
         mapUrl: form.mapUrl,
+        image: form.images && form.images.length > 0 ? form.images[0] : form.image,
+        images: form.images || [],
         ownerName: form.ownerName,
         amenities: selectedAmenities,
         schedule: activeSchedule,
-      } : f));
-    } else {
-      const newField: Field = {
-        id: Date.now(),
-        name: form.name,
-        location: form.location,
-        sport: form.sport,
-        price: Number(form.price),
-        active: true,
-        image: form.image || 'https://images.unsplash.com/photo-1551854838-212c50b4c184?w=80&h=60&fit=crop&auto=format',
-        bookings: 0,
-        mapUrl: form.mapUrl,
-        ownerName: isOwnerPortal ? currentOwner : form.ownerName,
-        amenities: selectedAmenities,
-        schedule: activeSchedule,
       };
-      setFields(prev => [...prev, newField]);
+
+      if (editField) {
+        const res = await fetch(`http://localhost:5000/api/fields/${editField.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          fetchFields();
+        }
+      } else {
+        const res = await fetch(`http://localhost:5000/api/fields`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          fetchFields();
+        }
+      }
+      setShowModal(false);
+      setEditField(null);
+      setForm(emptyForm());
+    } catch (err) {
+      console.error(err);
     }
-    persistSchedule(form.name, { ...activeSchedule, regularPrice: Number(activeSchedule.regularPrice || form.price) });
-    setShowModal(false);
-    setEditField(null);
-    setForm(emptyForm());
   };
 
   const openEdit = (f: Field) => {
     setEditField(f);
     setForm({
-      name: f.name,
-      location: f.location,
-      sport: f.sport,
-      price: String(f.price),
-      image: f.image,
-      mapUrl: f.mapUrl,
-      ownerName: f.ownerName ?? currentOwner,
+      name: f.name || '',
+      location: f.location || f.address || '',
+      sport: f.sport || 'Bóng đá',
+      price: String(f.price || 0),
+      description: f.description || '',
+      image: f.image || '',
+      images: f.images || (f.image ? [f.image] : []),
+      mapUrl: f.mapUrl || '',
+      ownerName: f.ownerName || '',
       amenities: f.amenities ?? [],
-      schedule: f.schedule ?? { ...createSchedule(), regularPrice: f.price, peakPrice: Math.round(f.price * 1.25) },
+      schedule: f.schedule ?? { ...createSchedule(), regularPrice: f.price || 0, peakPrice: Math.round((f.price || 0) * 1.25) },
     });
     setShowModal(true);
   };
@@ -255,14 +293,14 @@ export function FieldManagement() {
                       <p className="text-xs text-gray-400">Đối tác chủ sân</p>
                     </td>
                   )}
-                  <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{field.location}</td>
+                  <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{field.location || field.address}</td>
                   <td className="px-4 py-3.5">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap">
                       {field.sport}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 font-semibold text-gray-900 whitespace-nowrap">{field.price.toLocaleString('vi-VN')}đ</td>
-                  <td className="px-4 py-3.5 text-gray-600">{field.bookings}</td>
+                  <td className="px-4 py-3.5 font-semibold text-gray-900 whitespace-nowrap">{(field.price || 0).toLocaleString('vi-VN')}đ</td>
+                  <td className="px-4 py-3.5 text-gray-600">{field.bookings || 0}</td>
                   <td className="px-4 py-3.5">
                     <button
                       onClick={() => toggleActive(field.id)}
@@ -394,15 +432,67 @@ export function FieldManagement() {
                 <p className="mt-1.5 text-xs text-gray-400">Mở vị trí trên Google Maps, chọn Chia sẻ rồi dán liên kết vào đây.</p>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Mô tả sân</label>
+                <textarea
+                  placeholder="Nhập thông tin giới thiệu, mô tả chi tiết về sân..."
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+
               {/* Image Upload */}
               <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Hình ảnh</label>
-                <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 flex items-center gap-4 cursor-pointer hover:border-green-400 hover:bg-green-50 transition-colors">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Kéo thả hoặc nhấn để tải ảnh</p>
-                    <p className="text-xs text-gray-400 mt-0.5">PNG, JPG tối đa 10MB</p>
-                  </div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Hình ảnh (Có thể chọn nhiều ảnh)</label>
+                <div className="flex flex-wrap gap-3">
+                  {(form.images || []).map((url, idx) => (
+                    <div key={idx} className="relative h-24 w-32 shrink-0 rounded-xl overflow-hidden border border-gray-200">
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                      <button 
+                        type="button" 
+                        onClick={() => setForm(f => ({ ...f, images: (f.images || []).filter((_, i) => i !== idx) }))} 
+                        className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 shadow-sm"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                  <label className="flex h-24 w-32 shrink-0 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:border-green-400 hover:bg-green-50 transition-colors">
+                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    <span className="mt-1 text-xs font-medium text-gray-500">Thêm ảnh</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length === 0) return;
+                        try {
+                          const newUrls = await Promise.all(files.map(async (file) => {
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            formData.append('upload_preset', 'datsanthethao');
+                            
+                            const res = await fetch('https://api.cloudinary.com/v1_1/vafqskfg/image/upload', {
+                              method: 'POST',
+                              body: formData,
+                            });
+                            
+                            const data = await res.json();
+                            return data.secure_url;
+                          }));
+                          
+                          setForm(f => ({ ...f, images: [...(f.images || []), ...newUrls.filter(Boolean)] }));
+                        } catch (err) {
+                          console.error('Lỗi upload ảnh:', err);
+                          alert('Có lỗi khi tải ảnh lên. Vui lòng thử lại.');
+                        }
+                      }}
+                    />
+                  </label>
                 </div>
               </div>
 
@@ -550,7 +640,7 @@ export function FieldManagement() {
             <p className="text-gray-500 text-sm mb-6">Bạn có chắc muốn xóa sân này? Hành động này không thể hoàn tác.</p>
             <div className="flex gap-3">
               <button onClick={() => setShowDeleteConfirm(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">Hủy</button>
-              <button onClick={() => deleteField(showDeleteConfirm)} className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors">Xóa Sân</button>
+              <button onClick={() => deleteField(showDeleteConfirm as string)} className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors">Xóa Sân</button>
             </div>
           </div>
         </div>

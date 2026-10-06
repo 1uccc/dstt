@@ -1,42 +1,14 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signInWithPopup, 
+  GoogleAuthProvider 
+} from 'firebase/auth';
+import { auth } from '../config/firebase';
 
 type AuthMode = 'login' | 'register';
-type Role = 'admin' | 'owner' | 'customer';
-
-const DEMO_ACCOUNTS: Array<{
-  role: Role;
-  label: string;
-  description: string;
-  email: string;
-  password: string;
-  destination: string;
-}> = [
-  {
-    role: 'admin',
-    label: 'Quản trị viên',
-    description: 'Quản lý hệ thống',
-    email: 'admin@sportbook.vn',
-    password: 'Admin@123',
-    destination: '/admin',
-  },
-  {
-    role: 'owner',
-    label: 'Chủ sân',
-    description: 'Vận hành sân & lịch đặt',
-    email: 'owner@sportbook.vn',
-    password: 'Owner@123',
-    destination: '/owner',
-  },
-  {
-    role: 'customer',
-    label: 'Khách hàng',
-    description: 'Tìm và đặt sân nhanh',
-    email: 'customer@sportbook.vn',
-    password: 'Customer@123',
-    destination: '/',
-  },
-];
 
 function BrandMark() {
   return (
@@ -55,6 +27,7 @@ export function Auth() {
   const initialMode: AuthMode = searchParams.get('mode') === 'register' ? 'register' : 'login';
   const redirectTo = searchParams.get('redirect');
   const checkoutRequired = searchParams.get('reason') === 'checkout';
+  
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,6 +35,7 @@ export function Auth() {
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const changeMode = (nextMode: AuthMode) => {
     setMode(nextMode);
@@ -73,35 +47,134 @@ export function Auth() {
     setSearchParams(nextParams);
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError('');
-
-    if (mode === 'register') {
-      if (!fullName || !phone || !email || password.length < 8) {
-        setError('Vui lòng nhập đủ thông tin và dùng mật khẩu từ 8 ký tự.');
-        return;
-      }
-      localStorage.setItem('sportbook-session', JSON.stringify({ role: 'customer', email, name: fullName }));
-      navigate(redirectTo?.startsWith('/') ? redirectTo : '/');
-      return;
+  const syncUserToBackend = async (token: string, userData: any) => {
+    try {
+      await fetch('http://localhost:5000/api/auth/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(userData)
+      });
+    } catch (err) {
+      console.error('Lỗi đồng bộ user với backend:', err);
     }
-
-    const account = DEMO_ACCOUNTS.find(
-      (item) => item.email === email.trim().toLowerCase() && item.password === password,
-    );
-    if (!account) {
-      setError('Email hoặc mật khẩu chưa đúng. Bạn có thể chọn tài khoản mẫu bên phải.');
-      return;
-    }
-    localStorage.setItem('sportbook-session', JSON.stringify({ role: account.role, email: account.email, name: account.label }));
-    navigate(account.role === 'customer' && redirectTo?.startsWith('/') ? redirectTo : account.destination);
   };
 
-  const handleGoogleAuth = () => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setError('');
-    localStorage.setItem('sportbook-session', JSON.stringify({ role: 'customer', email: 'google.customer@example.com', name: 'Khách hàng Google' }));
-    navigate(redirectTo?.startsWith('/') ? redirectTo : '/');
+    setLoading(true);
+
+    try {
+      if (mode === 'register') {
+        if (!fullName || !phone || !email || password.length < 8) {
+          throw new Error('Vui lòng nhập đủ thông tin và dùng mật khẩu từ 8 ký tự.');
+        }
+        
+        // 1. Tạo user trên Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        const token = await user.getIdToken();
+
+        // 2. Đồng bộ user qua Backend
+        await syncUserToBackend(token, { email, fullName, role: 'customer', phone });
+
+        localStorage.setItem('token', token);
+        localStorage.setItem('sportbook-session', JSON.stringify({ role: 'customer', email, name: fullName }));
+        
+      } else {
+        // Đăng nhập
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        const token = await user.getIdToken();
+        
+        // Fetch user profile to get role and status
+        let role = 'customer';
+        let name = user.email;
+        let status = 'active';
+        try {
+          const profileRes = await fetch('http://localhost:5000/api/users/profile', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            if (profileData.role) role = profileData.role;
+            if (profileData.fullName) name = profileData.fullName;
+            if (profileData.status) status = profileData.status;
+          }
+        } catch (err) {
+          console.error('Lỗi lấy profile:', err);
+        }
+
+        if (status === 'pending') {
+          await auth.signOut();
+          setError('Tài khoản của bạn đang chờ Admin phê duyệt. Vui lòng quay lại sau.');
+          setLoading(false);
+          return;
+        }
+
+        localStorage.setItem('token', token);
+        localStorage.setItem('sportbook-session', JSON.stringify({ role, email, name }));
+      }
+      
+      navigate(redirectTo?.startsWith('/') ? redirectTo : '/');
+    } catch (err: any) {
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Email này đã được đăng ký.');
+      } else if (err.code === 'auth/invalid-credential') {
+        setError('Email hoặc mật khẩu không đúng.');
+      } else {
+        setError(err.message || 'Đã xảy ra lỗi.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleAuth = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
+      const token = await user.getIdToken();
+
+      await syncUserToBackend(token, { email: user.email, fullName: user.displayName, role: 'customer' });
+
+      let role = 'customer';
+      let status = 'active';
+      try {
+        const profileRes = await fetch('http://localhost:5000/api/users/profile', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          if (profileData.role) role = profileData.role;
+          if (profileData.status) status = profileData.status;
+        }
+      } catch (err) {
+        console.error('Lỗi lấy profile:', err);
+      }
+
+      if (status === 'pending') {
+        await auth.signOut();
+        setError('Tài khoản của bạn đang chờ Admin phê duyệt. Vui lòng quay lại sau.');
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('sportbook-session', JSON.stringify({ role, email: user.email, name: user.displayName }));
+      
+      navigate(redirectTo?.startsWith('/') ? redirectTo : '/');
+    } catch (err: any) {
+      setError('Đã xảy ra lỗi với Google: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -203,11 +276,11 @@ export function Auth() {
               <>
                 <div>
                   <label htmlFor="fullName" className="mb-1.5 block text-sm font-medium text-slate-700">Họ và tên</label>
-                  <input id="fullName" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Nguyễn Minh Anh" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-500/10" />
+                  <input id="fullName" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Nguyễn Minh Anh" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-500/10" disabled={loading} />
                 </div>
                 <div>
                   <label htmlFor="phone" className="mb-1.5 block text-sm font-medium text-slate-700">Số điện thoại</label>
-                  <input id="phone" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="0901 234 567" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-500/10" />
+                  <input id="phone" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="0901 234 567" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-500/10" disabled={loading} />
                 </div>
               </>
             )}
@@ -218,7 +291,7 @@ export function Auth() {
                 <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 6h16v12H4V6Zm0 1 8 6 8-6" />
                 </svg>
-                <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-500/10" />
+                <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-500/10" disabled={loading} />
               </div>
             </div>
 
@@ -231,7 +304,7 @@ export function Auth() {
                 <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M7 10V8a5 5 0 0 1 10 0v2m-11 0h12v10H6V10Z" />
                 </svg>
-                <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'register' ? 'Tối thiểu 8 ký tự' : 'Nhập mật khẩu'} className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-12 pr-20 text-sm text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-500/10" />
+                <input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'register' ? 'Tối thiểu 8 ký tự' : 'Nhập mật khẩu'} className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-12 pr-20 text-sm text-slate-900 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-500/10" disabled={loading} />
                 <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500 hover:text-green-700">
                   {showPassword ? 'Ẩn' : 'Hiện'}
                 </button>
@@ -242,11 +315,13 @@ export function Auth() {
               <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
             )}
 
-            <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-green-600/20 transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500/20">
-              {mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m9 5 7 7-7 7" />
-              </svg>
+            <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-green-600/20 transition hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500/20 disabled:opacity-50">
+              {loading ? 'Đang xử lý...' : (mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản')}
+              {!loading && (
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m9 5 7 7-7 7" />
+                </svg>
+              )}
             </button>
 
             <div className="flex items-center gap-3">
@@ -258,7 +333,8 @@ export function Auth() {
             <button
               type="button"
               onClick={handleGoogleAuth}
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200 disabled:opacity-50"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.6h3.3c1.9-1.8 2.9-4.4 2.9-7.5Z" />
@@ -268,20 +344,6 @@ export function Auth() {
               </svg>
               {mode === 'login' ? 'Đăng nhập bằng Google' : 'Đăng ký bằng Google'}
             </button>
-
-            {mode === 'login' && (
-              <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                <summary className="cursor-pointer text-xs font-semibold text-slate-600">Xem tài khoản dùng thử</summary>
-                <div className="mt-3 space-y-2">
-                  {DEMO_ACCOUNTS.map((account) => (
-                    <div key={account.role} className="flex items-center justify-between gap-3 text-xs">
-                      <span className="font-medium text-slate-500">{account.label}</span>
-                      <code className="text-right font-mono text-slate-700">{account.email} / {account.password}</code>
-                    </div>
-                  ))}
-                </div>
-              </details>
-            )}
           </form>
 
           <p className="mt-6 text-center text-xs leading-relaxed text-slate-400">

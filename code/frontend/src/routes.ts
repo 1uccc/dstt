@@ -17,6 +17,8 @@ import { AdminUsers } from './pages/admin/Users';
 import { AdminSettings } from './pages/admin/Settings';
 import { OwnerRegistration } from './pages/OwnerRegistration';
 import { OwnerPaymentSettings } from './pages/owner/PaymentSettings';
+import { ProfileSettings } from './pages/ProfileSettings';
+import { CustomerBookings } from './pages/CustomerBookings';
 
 export const router = createBrowserRouter([
   {
@@ -36,6 +38,8 @@ export const router = createBrowserRouter([
       { path: 'field/:id', Component: FieldDetail },
       { path: 'checkout', Component: Checkout },
       { path: 'contact', Component: Contact },
+      { path: 'profile', Component: ProfileSettings },
+      { path: 'bookings', Component: CustomerBookings },
     ],
   },
   {
@@ -57,6 +61,7 @@ export const router = createBrowserRouter([
       { path: 'bookings', Component: OwnerBookings },
       { path: 'fields', Component: FieldManagement },
       { path: 'payment', Component: OwnerPaymentSettings },
+      { path: 'profile', Component: ProfileSettings },
     ],
   },
 ]);

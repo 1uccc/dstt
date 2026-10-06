@@ -51,10 +51,18 @@ export function Checkout() {
       return {};
     }
   })();
-  const state = (location.state as { slots?: string[]; date?: number; total?: number; field?: string }) || pendingCheckout;
+  const state = (location.state as { slots?: string[]; date?: number; total?: number; field?: string; fieldId?: string }) || pendingCheckout;
 
   const fieldName = state.field || 'Sân Bóng Đá Phú Thọ';
+  const fieldId = state.fieldId || '';
   const slots = state.slots || ['17:00 - 18:30', '18:30 - 20:00'];
+  const dateObj = new Date();
+  
+  // state.date is now a YYYY-MM-DD string, if not provided, fallback to today
+  const dateString = state.date 
+    ? state.date 
+    : `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+  
   const subtotal = state.total || 700000;
   const total = subtotal;
 
@@ -67,11 +75,14 @@ export function Checkout() {
   const [paid, setPaid] = useState(false);
   const activeMethod = availableMethods.find((method) => method.id === selectedMethod) ?? availableMethods[0];
   const canConfirmTransfer = activeMethod.id === 'card' || Boolean(ownerPayment.qrCodes[activeMethod.id]);
+  const [session, setSession] = useState<any>(null);
 
   useEffect(() => {
     let isCustomer = false;
     try {
-      isCustomer = JSON.parse(localStorage.getItem('sportbook-session') ?? '{}').role === 'customer';
+      const stored = JSON.parse(localStorage.getItem('sportbook-session') ?? '{}');
+      isCustomer = stored.role === 'customer';
+      setSession(stored);
     } catch {
       isCustomer = false;
     }
@@ -90,27 +101,48 @@ export function Checkout() {
     else alert('Mã giảm giá không hợp lệ. Hãy thử: SPORT10');
   };
 
-  const confirmTransfer = () => {
-    const [start = '17:00', end = '18:30'] = slots[0]?.split(' - ') ?? [];
-    const pendingBooking = {
-      id: Date.now(),
-      start,
-      end,
-      customer: 'Khách hàng trực tuyến',
-      phone: 'Đã xác thực',
-      field: fieldName,
-      amount: `${finalTotal.toLocaleString('vi-VN')}đ`,
-      status: 'pending',
-      paymentMethod: activeMethod.name,
-      reference: 'SPB20260925',
-    };
-    try {
-      const current = JSON.parse(localStorage.getItem('sportbook-owner-bookings') ?? '[]');
-      localStorage.setItem('sportbook-owner-bookings', JSON.stringify([pendingBooking, ...current]));
-    } catch {
-      localStorage.setItem('sportbook-owner-bookings', JSON.stringify([pendingBooking]));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const confirmTransfer = async () => {
+    setIsSubmitting(true);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Vui lòng đăng nhập.');
+      setIsSubmitting(false);
+      return;
     }
-    setPaid(true);
+
+    const payload = {
+      customerName: session?.name || 'Khách hàng',
+      phone: session?.phone || '',
+      fieldId: fieldId,
+      date: dateString,
+      time: slots.join(', '),
+      amount: finalTotal,
+      paymentMethod: activeMethod.name,
+      reference: 'SPB' + Date.now().toString().slice(-6),
+    };
+
+    try {
+      const res = await fetch('http://localhost:5000/api/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setPaid(true);
+      } else {
+        const data = await res.json();
+        alert('Lỗi đặt sân: ' + data.message);
+      }
+    } catch (err) {
+      alert('Lỗi kết nối.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (paid) {
@@ -299,7 +331,7 @@ export function Checkout() {
               <div className="space-y-2 text-sm mb-4">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Ngày chơi</span>
-                  <span className="font-medium text-gray-900">Thứ Sáu, 25/09/2026</span>
+                  <span className="font-medium text-gray-900">{dateString}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Khung giờ</span>
@@ -308,8 +340,8 @@ export function Checkout() {
                   </div>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Loại sân</span>
-                  <span className="font-medium text-gray-900">Sân 7 người</span>
+                  <span className="text-gray-500">Sân</span>
+                  <span className="font-medium text-gray-900">{fieldName}</span>
                 </div>
               </div>
 
@@ -333,12 +365,19 @@ export function Checkout() {
 
               <button
                 onClick={confirmTransfer}
-                disabled={!canConfirmTransfer}
+                disabled={!canConfirmTransfer || isSubmitting}
                 className="mt-5 w-full py-4 rounded-xl font-bold text-base text-white bg-green-600 hover:bg-green-700 transition-colors shadow-xl shadow-green-600/30 flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                Tôi đã chuyển {finalTotal.toLocaleString('vi-VN')}đ
+                {isSubmitting ? (
+                  'Đang xử lý...'
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    Tôi đã chuyển {finalTotal.toLocaleString('vi-VN')}đ
+                  </>
+                )}
               </button>
+
 
               <p className="text-center text-xs text-gray-400 mt-3">
                 Chủ sân sẽ kiểm tra giao dịch trước khi xác nhận lịch đặt.

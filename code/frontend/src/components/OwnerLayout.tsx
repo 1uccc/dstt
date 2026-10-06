@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { auth } from '../config/firebase';
 
 function GridIcon() {
   return <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z" /></svg>;
@@ -22,16 +23,83 @@ const NAV_ITEMS = [
   { to: '/owner/bookings', label: 'Lịch đặt sân', icon: <CalendarIcon /> },
   { to: '/owner/fields', label: 'Sân của tôi', icon: <FieldIcon /> },
   { to: '/owner/payment', label: 'Thanh toán', icon: <PaymentIcon /> },
+  { to: '/owner/profile', label: 'Hồ sơ', icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
 ];
 
 export function OwnerLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [ownerName, setOwnerName] = useState('Chủ sân');
+  const [businessName, setBusinessName] = useState('Đơn vị đối tác');
+  const [fieldCount, setFieldCount] = useState(0);
+
+  useEffect(() => {
+    // Lấy thông tin session
+    const sessionStr = localStorage.getItem('sportbook-session');
+    if (sessionStr) {
+      try {
+        const session = JSON.parse(sessionStr);
+        setOwnerName(session.name || 'Chủ sân');
+      } catch (e) {}
+    }
+
+    const fetchFieldsAndProfile = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        // Fetch profile
+        const profileRes = await fetch('http://localhost:5000/api/users/profile', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          if (profile.businessInfo?.businessName) {
+            setBusinessName(profile.businessInfo.businessName);
+          }
+        }
+
+        // Fetch fields & bookings for notifications
+        const [fieldsRes, bookingsRes] = await Promise.all([
+          fetch('http://localhost:5000/api/fields'),
+          fetch('http://localhost:5000/api/bookings', { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+        
+        if (fieldsRes.ok) {
+          const fields = await fieldsRes.json();
+          const uid = auth.currentUser?.uid;
+          if (uid) {
+            setFieldCount(fields.filter((f: any) => f.owner === uid).length);
+          }
+        }
+
+        if (bookingsRes.ok) {
+          const bookings = await bookingsRes.json();
+          const pendingBookings = bookings.filter((b: any) => b.status === 'pending');
+          setNotifications(pendingBookings);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) {
+        fetchFieldsAndProfile();
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const isActive = (to: string) =>
     to === '/owner' ? location.pathname === '/owner' : location.pathname.startsWith(to);
   const activeLabel = NAV_ITEMS.find((item) => isActive(item.to))?.label ?? 'Cổng chủ sân';
+  
+  const todayDateString = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -51,10 +119,12 @@ export function OwnerLayout() {
         <div className="px-5 py-5">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
             <div className="flex items-center gap-3">
-              <img className="h-10 w-10 rounded-xl object-cover" src="https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=96&h=96&fit=crop&auto=format" alt="Sân thể thao Phú Thọ" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm font-bold text-white">
+                {businessName.charAt(0).toUpperCase()}
+              </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">Phú Thọ Sports</p>
-                <p className="text-xs text-green-300">3 sân đang hoạt động</p>
+                <p className="truncate text-sm font-semibold">{businessName}</p>
+                <p className="text-xs text-green-300">{fieldCount} sân đang hoạt động</p>
               </div>
             </div>
           </div>
@@ -79,9 +149,11 @@ export function OwnerLayout() {
 
         <div className="border-t border-white/10 p-4">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-green-200 text-xs font-bold text-green-950">MH</div>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-200 text-xs font-bold text-green-950">
+              {ownerName.split(' ').pop()?.[0]?.toUpperCase() || 'U'}
+            </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">Minh Hoàng</p>
+              <p className="truncate text-sm font-medium">{ownerName}</p>
               <p className="truncate text-xs text-green-300">Chủ sân</p>
             </div>
           </div>
@@ -102,16 +174,56 @@ export function OwnerLayout() {
             </button>
             <div>
               <p className="font-display text-xl font-bold uppercase tracking-wide text-slate-900">{activeLabel}</p>
-              <p className="text-xs text-slate-500">Thứ Sáu, 25 tháng 9 năm 2026</p>
+              <p className="text-xs text-slate-500">{todayDateString}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="relative rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50" aria-label="Thông báo">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-4-5.7V5a2 2 0 10-4 0v.3A6 6 0 006 11v3.2a2 2 0 01-.6 1.4L4 17h11zm0 0v1a3 3 0 11-6 0v-1h6z" /></svg>
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white" />
-            </button>
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-semibold text-slate-800">Minh Hoàng</p>
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className={`relative rounded-xl border p-2.5 transition-colors ${showNotifications ? 'bg-slate-100 border-slate-300' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`} 
+                aria-label="Thông báo"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-4-5.7V5a2 2 0 10-4 0v.3A6 6 0 006 11v3.2a2 2 0 01-.6 1.4L4 17h11zm0 0v1a3 3 0 11-6 0v-1h6z" /></svg>
+                {notifications.length > 0 && (
+                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                  <div className="mb-2 flex items-center justify-between px-3 pt-2">
+                    <p className="font-display font-bold uppercase text-slate-900">Thông báo</p>
+                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-600">{notifications.length} mới</span>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length > 0 ? (
+                      notifications.map(noti => (
+                        <Link 
+                          key={noti.id} 
+                          to="/owner/bookings" 
+                          onClick={() => setShowNotifications(false)}
+                          className="block rounded-xl p-3 hover:bg-slate-50"
+                        >
+                          <p className="text-sm font-semibold text-slate-800">
+                            Đơn đặt sân mới từ <span className="text-green-700">{noti.customerName}</span>
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {noti.fieldName} · {noti.time} ngày {noti.date}
+                          </p>
+                        </Link>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-sm text-slate-500">
+                        Bạn không có thông báo mới.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="hidden text-right sm:block ml-2">
+              <p className="text-sm font-semibold text-slate-800">{ownerName}</p>
               <p className="text-xs text-slate-500">Tài khoản chủ sân</p>
             </div>
           </div>

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router';
 
 type OwnerScheduleSettings = {
   field: string;
@@ -43,12 +43,6 @@ const AMENITIES = [
   { icon: '📸', label: 'Camera an ninh 24/7' },
 ];
 
-const REVIEWS = [
-  { name: 'Nguyễn Văn A', avatar: 'NV', rating: 5, date: '18/09/2026', comment: 'Sân chất lượng rất tốt, cỏ mềm và bằng phẳng. Đặt sân online tiện lợi, staff nhiệt tình. Sẽ quay lại!' },
-  { name: 'Trần Thị B', avatar: 'TB', rating: 4, date: '10/09/2026', comment: 'Giá cả hợp lý, cơ sở vật chất sạch sẽ. Chỉ hơi khó đỗ xe vào giờ cao điểm nhưng nhìn chung rất ổn.' },
-  { name: 'Lê Minh C', avatar: 'LM', rating: 5, date: '02/09/2026', comment: 'Tuyệt vời! Đây là sân bóng tốt nhất mình từng chơi ở TP.HCM. Ánh sáng ban đêm rất tốt, không bị chói mắt.' },
-];
-
 const PRICE_PER_SLOT = 350000;
 const FIELD_MAP_URL = 'https://www.google.com/maps/search/?api=1&query=Nhà+thi+đấu+Phú+Thọ,+Quận+11,+TP.HCM';
 const FIELD_MAP_EMBED = 'https://www.google.com/maps?q=Nhà+thi+đấu+Phú+Thọ,+Quận+11,+TP.HCM&output=embed';
@@ -84,14 +78,86 @@ function minutesToTime(value: number) {
 }
 
 export function FieldDetail() {
+  const { id } = useParams();
   const navigate = useNavigate();
   const [activeImg, setActiveImg] = useState(0);
   const [selectedDate, setSelectedDate] = useState<number | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [field, setField] = useState<any>(null);
+  const [fieldBookings, setFieldBookings] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [canReview, setCanReview] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  
   const today = new Date();
   const [calMonth] = useState(today.getMonth());
   const [calYear] = useState(today.getFullYear());
-  const [ownerSchedule] = useState<OwnerScheduleSettings | null>(() => loadOwnerSchedule('Sân Bóng Đá Phú Thọ'));
+
+  useEffect(() => {
+    const fetchField = async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/api/fields/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setField(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    
+    const fetchBookings = async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/api/fields/${id}/bookings`);
+        if (res.ok) setFieldBookings(await res.json());
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    
+    const fetchReviews = async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/api/fields/${id}/reviews`);
+        if (res.ok) {
+          const data = await res.json();
+          setReviews(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const checkCanReview = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const res = await fetch(`http://localhost:5000/api/fields/${id}/can-review`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCanReview(data.canReview);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    if (id) {
+      fetchField();
+      fetchBookings();
+      fetchReviews();
+      checkCanReview();
+    }
+  }, [id]);
+
+  const ownerSchedule: OwnerScheduleSettings | null = field?.schedule ? {
+    field: field.name,
+    ...field.schedule
+  } : null;
 
   const daysInMonth = getDaysInMonth(calYear, calMonth);
   const firstDay = new Date(calYear, calMonth, 1).getDay();
@@ -108,29 +174,48 @@ export function FieldDetail() {
     ? ownerSchedule?.days[new Date(calYear, calMonth, selectedDate).getDay()]
     : null;
   const selectedDateBlocked = Boolean(selectedDateValue && ownerSchedule?.blockedDates?.includes(selectedDateValue));
+  
+  const isSelectedDateToday = selectedDateValue === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const currentMinutes = today.getHours() * 60 + today.getMinutes();
+
   const displayedSlots = ownerSchedule && selectedDaySchedule?.enabled && !selectedDateBlocked
     ? Array.from(
         { length: Math.max(0, Math.floor((timeToMinutes(selectedDaySchedule.close) - timeToMinutes(selectedDaySchedule.open)) / ownerSchedule.slotMinutes)) },
         (_, index) => {
           const start = timeToMinutes(selectedDaySchedule.open) + index * ownerSchedule.slotMinutes;
-          return { time: `${minutesToTime(start)} - ${minutesToTime(start + ownerSchedule.slotMinutes)}`, status: 'available' };
+          const timeStr = `${minutesToTime(start)} - ${minutesToTime(start + ownerSchedule.slotMinutes)}`;
+          let status = 'available';
+          const isBooked = fieldBookings.some(b => b.date === selectedDateValue && b.time.includes(timeStr));
+          if (isBooked || (isSelectedDateToday && start <= currentMinutes)) status = 'booked';
+          return { time: timeStr, status };
         },
       )
     : ownerSchedule && selectedDate
       ? []
-      : TIME_SLOTS;
+      : TIME_SLOTS.map(slot => {
+          let status = slot.status;
+          const startMinutes = timeToMinutes(slot.time.split(' - ')[0]);
+          const isBooked = fieldBookings.some(b => b.date === selectedDateValue && b.time.includes(slot.time));
+          if (isBooked || (isSelectedDateToday && startMinutes <= currentMinutes)) status = 'booked';
+          return { ...slot, status };
+      });
   const priceForSlot = (slot: string) =>
     ownerSchedule && slot.slice(0, 5) >= ownerSchedule.peakStart ? ownerSchedule.peakPrice : ownerSchedule?.regularPrice ?? PRICE_PER_SLOT;
   const total = selectedSlots.reduce((sum, slot) => sum + priceForSlot(slot), 0);
+  
+  let isCustomer = false;
+  let customerName = 'Khách hàng';
+  try {
+    const sessionStr = localStorage.getItem('sportbook-session');
+    if (sessionStr) {
+      const sessionObj = JSON.parse(sessionStr);
+      isCustomer = sessionObj.role === 'customer';
+      customerName = sessionObj.user?.displayName || sessionObj.user?.fullName || 'Khách hàng';
+    }
+  } catch {}
 
   const handleCheckout = () => {
-    const checkoutState = { slots: selectedSlots, date: selectedDate, total, field: 'Sân Bóng Đá Phú Thọ' };
-    let isCustomer = false;
-    try {
-      isCustomer = JSON.parse(localStorage.getItem('sportbook-session') ?? '{}').role === 'customer';
-    } catch {
-      isCustomer = false;
-    }
+    const checkoutState = { slots: selectedSlots, date: selectedDateValue, total, field: field?.name || 'Sân bóng', fieldId: field?.id };
     if (!isCustomer) {
       sessionStorage.setItem('sportbook-pending-checkout', JSON.stringify(checkoutState));
       navigate('/auth?redirect=/checkout&reason=checkout');
@@ -138,6 +223,36 @@ export function FieldDetail() {
     }
     navigate('/checkout', { state: checkoutState });
   };
+  
+  const submitReview = async () => {
+    if (!reviewComment.trim()) return;
+    setSubmittingReview(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/fields/${id}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ rating: reviewRating, comment: reviewComment, customerName })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReviews([data.review, ...reviews]);
+        setShowReviewForm(false);
+        setReviewComment('');
+        // Update local rating optimistically if we want, or just wait for next fetch
+      } else {
+        alert('Có lỗi xảy ra khi gửi đánh giá');
+      }
+    } catch {
+      alert('Lỗi kết nối');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  if (!field) return <div className="p-8 text-center text-gray-500">Đang tải thông tin sân...</div>;
+
+  const displayImages = field.images && field.images.length > 0 ? field.images : (field.image ? [field.image] : IMAGES);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -147,36 +262,42 @@ export function FieldDetail() {
         <span>/</span>
         <button onClick={() => navigate('/search')} className="hover:text-green-600 transition-colors">Tìm sân</button>
         <span>/</span>
-        <span className="text-gray-900 font-medium">Sân Bóng Đá Phú Thọ</span>
+        <span className="text-gray-900 font-medium">{field.name}</span>
       </nav>
 
       {/* Image Gallery */}
       <div className="grid grid-cols-4 gap-2 mb-8 rounded-2xl overflow-hidden h-80 sm:h-96">
         <div className="col-span-4 sm:col-span-3 relative overflow-hidden bg-gray-100">
-          <img src={IMAGES[activeImg]} alt="Field" className="w-full h-full object-cover" />
-          <button
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-md"
-            onClick={() => setActiveImg(i => (i - 1 + IMAGES.length) % IMAGES.length)}
-          >‹</button>
-          <button
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-md"
-            onClick={() => setActiveImg(i => (i + 1) % IMAGES.length)}
-          >›</button>
-          <div className="absolute bottom-3 right-3 bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">
-            {activeImg + 1} / {IMAGES.length}
+          <img src={displayImages[activeImg] || displayImages[0]} alt="Field" className="w-full h-full object-cover" />
+          {displayImages.length > 1 && (
+            <>
+              <button
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-md"
+                onClick={() => setActiveImg(i => (i - 1 + displayImages.length) % displayImages.length)}
+              >‹</button>
+              <button
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-md"
+                onClick={() => setActiveImg(i => (i + 1) % displayImages.length)}
+              >›</button>
+              <div className="absolute bottom-3 right-3 bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">
+                {activeImg + 1} / {displayImages.length}
+              </div>
+            </>
+          )}
+        </div>
+        {displayImages.length > 1 && (
+          <div className="hidden sm:flex flex-col gap-2 col-span-1">
+            {displayImages.slice(0, 3).map((img: string, i: number) => (
+              <div
+                key={i}
+                onClick={() => setActiveImg(i)}
+                className={`flex-1 cursor-pointer overflow-hidden rounded-lg bg-gray-100 border-2 transition-colors ${activeImg === i ? 'border-green-500' : 'border-transparent'}`}
+              >
+                <img src={img} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
+              </div>
+            ))}
           </div>
-        </div>
-        <div className="hidden sm:flex flex-col gap-2 col-span-1">
-          {IMAGES.slice(0, 3).map((img, i) => (
-            <div
-              key={i}
-              onClick={() => setActiveImg(i)}
-              className={`flex-1 cursor-pointer overflow-hidden rounded-lg bg-gray-100 border-2 transition-colors ${activeImg === i ? 'border-green-500' : 'border-transparent'}`}
-            >
-              <img src={img} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
-            </div>
-          ))}
-        </div>
+        )}
       </div>
 
       {/* Main Content */}
@@ -188,20 +309,20 @@ export function FieldDetail() {
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <h1 style={{ fontFamily: 'Barlow Condensed, sans-serif' }} className="text-4xl font-extrabold text-gray-900 uppercase tracking-tight">
-                  Sân Bóng Đá Phú Thọ
+                  {field.name}
                 </h1>
                 <div className="flex items-center gap-2 mt-1 text-gray-600 text-sm">
                   <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
-                  <span>123 Đường Tô Hiến Thành, Phường 15, Quận 11, TP.HCM</span>
+                  <span>{field.location || field.address || 'Đang cập nhật'}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-center">
-                  <div className="text-2xl font-bold text-amber-600">4.8</div>
+                  <div className="text-2xl font-bold text-amber-600">{Number(field.rating || 0).toFixed(1)}</div>
                   <div className="flex items-center gap-0.5 justify-center">
-                    {[1,2,3,4,5].map(i => <svg key={i} className="w-3 h-3 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
+                    {[1,2,3,4,5].map(i => <svg key={i} className={`w-3 h-3 ${i <= Math.floor(field.rating || 0) ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">124 đánh giá</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{field.reviews || 0} đánh giá</div>
                 </div>
               </div>
             </div>
@@ -209,8 +330,8 @@ export function FieldDetail() {
             {/* Map Snippet */}
             <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
               <iframe
-                title="Bản đồ Sân Bóng Đá Phú Thọ"
-                src={FIELD_MAP_EMBED}
+                title={`Bản đồ ${field.name}`}
+                src={`https://www.google.com/maps?q=${encodeURIComponent(field.location || field.address || field.name)}&output=embed`}
                 className="h-48 w-full border-0"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
@@ -218,11 +339,13 @@ export function FieldDetail() {
               <div className="flex items-center justify-between gap-3 bg-white px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2 text-sm text-gray-600">
                   <svg className="h-4 w-4 shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 21s7-5.5 7-12A7 7 0 1 0 5 9c0 6.5 7 12 7 12Zm0-9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /></svg>
-                  <span className="truncate">123 Tô Hiến Thành, Quận 11, TP.HCM</span>
+                  <span className="truncate">{field.location || field.address || 'Chưa cập nhật địa chỉ'}</span>
                 </div>
-                <a href={FIELD_MAP_URL} target="_blank" rel="noreferrer" className="shrink-0 text-sm font-semibold text-green-700 hover:text-green-800">
-                  Mở Google Maps ↗
-                </a>
+                {field.mapUrl && (
+                  <a href={field.mapUrl} target="_blank" rel="noreferrer" className="shrink-0 text-sm font-semibold text-green-700 hover:text-green-800">
+                    Mở Google Maps ↗
+                  </a>
+                )}
               </div>
             </div>
           </div>
@@ -230,45 +353,95 @@ export function FieldDetail() {
           {/* Description */}
           <div>
             <h2 className="font-bold text-gray-900 text-lg mb-3">Mô Tả Sân</h2>
-            <p className="text-gray-600 leading-relaxed text-sm">
-              Sân bóng đá Phú Thọ là một trong những sân cỏ nhân tạo chất lượng cao tại TP.HCM, với diện tích 7.500 m²
-              đạt tiêu chuẩn FIFA Quality Pro. Sân được lắp đặt hệ thống đèn chiếu sáng 800 lux, phù hợp để tổ chức
-              các giải đấu đêm. Với khuôn viên rộng rãi, bãi giữ xe miễn phí và đội ngũ nhân viên chuyên nghiệp,
-              đây là lựa chọn hàng đầu cho các trận đấu phong trào và giải đấu cộng đồng.
-            </p>
-            <p className="text-gray-600 leading-relaxed text-sm mt-3">
-              Sân có khả năng bố trí cho bóng 5 người, 7 người và 11 người tùy theo yêu cầu.
-              Đặt sân trước ít nhất 2 tiếng để đảm bảo khung giờ theo ý muốn.
-            </p>
+            <div className="text-gray-600 leading-relaxed text-sm whitespace-pre-wrap">
+              {field.description || 'Chưa có thông tin mô tả chi tiết cho sân này.'}
+            </div>
           </div>
 
           {/* Amenities */}
           <div>
             <h2 className="font-bold text-gray-900 text-lg mb-3">Tiện Ích</h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {AMENITIES.map(a => (
-                <div key={a.label} className="bg-green-50 border border-green-100 rounded-xl p-3 text-center">
-                  <div className="text-xl mb-1">{a.icon}</div>
-                  <div className="text-xs text-gray-700 font-medium leading-tight">{a.label}</div>
-                </div>
-              ))}
+              {(field.amenities || []).length > 0 ? (
+                field.amenities.map((a: string) => {
+                  const label = { parking: 'Bãi đỗ xe', wifi: 'Wi-Fi', referee: 'Trọng tài', lights: 'Đèn chiếu sáng', showers: 'Phòng thay đồ' }[a] || a;
+                  const icon = { parking: '🅿️', wifi: '📶', referee: '🧑‍⚖️', lights: '💡', showers: '🚿' }[a] || '✅';
+                  return (
+                    <div key={a} className="bg-green-50 border border-green-100 rounded-xl p-3 text-center">
+                      <div className="text-xl mb-1">{icon}</div>
+                      <div className="text-xs text-gray-700 font-medium leading-tight">{label}</div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="col-span-4 text-sm text-gray-500">Chưa có thông tin tiện ích.</div>
+              )}
             </div>
           </div>
 
           {/* Reviews */}
           <div>
-            <h2 className="font-bold text-gray-900 text-lg mb-4">Đánh Giá Từ Khách Hàng</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-gray-900 text-lg">Đánh Giá Từ Khách Hàng</h2>
+              {isCustomer && canReview && !showReviewForm && (
+                <button onClick={() => setShowReviewForm(true)} className="text-sm font-semibold text-green-700 bg-green-50 px-4 py-2 rounded-lg hover:bg-green-100 transition-colors">
+                  + Viết đánh giá
+                </button>
+              )}
+            </div>
+            
+            {showReviewForm && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-900">Viết đánh giá của bạn</h3>
+                  <button onClick={() => setShowReviewForm(false)} className="text-gray-400 hover:text-gray-600">×</button>
+                </div>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-sm text-gray-600">Chất lượng:</span>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button key={star} onClick={() => setReviewRating(star)} className="focus:outline-none">
+                        <svg className={`w-6 h-6 ${star <= reviewRating ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  placeholder="Chia sẻ trải nghiệm của bạn về sân bóng này..."
+                  className="w-full h-24 rounded-lg border border-gray-200 p-3 text-sm focus:ring-1 focus:ring-green-500 focus:outline-none mb-3 resize-none"
+                />
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setShowReviewForm(false)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    Hủy
+                  </button>
+                  <button 
+                    onClick={submitReview}
+                    disabled={submittingReview || !reviewComment.trim()}
+                    className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg transition-colors shadow-sm"
+                  >
+                    {submittingReview ? 'Đang gửi...' : 'Gửi đánh giá'}
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-4">
-              {REVIEWS.map((r, i) => (
-                <div key={i} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+              {reviews.map((r, i) => (
+                <div key={r.id || i} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                      {r.avatar}
+                    <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-bold shrink-0 uppercase">
+                      {r.avatar || (r.customerName || 'KH').substring(0, 2)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-gray-900 text-sm">{r.name}</span>
-                        <span className="text-xs text-gray-400">{r.date}</span>
+                        <span className="font-semibold text-gray-900 text-sm">{r.name || r.customerName}</span>
+                        <span className="text-xs text-gray-400">
+                          {r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : r.date}
+                        </span>
                       </div>
                       <div className="flex items-center gap-0.5 mt-0.5 mb-2">
                         {[1,2,3,4,5].map(i => <svg key={i} className={`w-3 h-3 ${i <= r.rating ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
@@ -278,6 +451,12 @@ export function FieldDetail() {
                   </div>
                 </div>
               ))}
+              
+              {reviews.length === 0 && (
+                <div className="text-center py-6 text-gray-500 text-sm bg-gray-50 rounded-xl">
+                  Chưa có đánh giá nào cho sân này.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -312,12 +491,13 @@ export function FieldDetail() {
                     {Array(firstDay).fill(null).map((_, i) => <div key={`empty-${i}`} />)}
                     {Array(daysInMonth).fill(null).map((_, i) => {
                       const day = i + 1;
-                      const isPast = day < today.getDate();
+                      const dateObj = new Date(calYear, calMonth, day);
+                      const isPast = dateObj.getTime() < new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
                       const isSelected = selectedDate === day;
-                      const isToday = day === today.getDate();
+                      const isToday = day === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear();
                       const dateValue = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                       const dayClosed = ownerSchedule
-                        ? !ownerSchedule.days[new Date(calYear, calMonth, day).getDay()]?.enabled || ownerSchedule.blockedDates?.includes(dateValue)
+                        ? !ownerSchedule.days[dateObj.getDay()]?.enabled || ownerSchedule.blockedDates?.includes(dateValue)
                         : false;
                       return (
                         <button

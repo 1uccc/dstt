@@ -1,36 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 
-const ALL_FIELDS = [
-  { id: 1, name: 'Sân Bóng Đá Phú Thọ', location: 'Quận 11, TP.HCM', sport: 'Bóng đá', rating: 4.8, reviews: 124, price: 350000, distance: 1.2, image: 'https://images.unsplash.com/photo-1551854838-212c50b4c184?w=500&h=320&fit=crop&auto=format', slots: ['06:00', '08:00', '17:00', '19:00'], amenities: ['parking', 'referee', 'lights'] },
-  { id: 2, name: 'Tennis Center Thảo Điền', location: 'Quận 2, TP.HCM', sport: 'Tennis', rating: 4.9, reviews: 89, price: 280000, distance: 3.5, image: 'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=500&h=320&fit=crop&auto=format', slots: ['07:00', '09:00', '16:00', '18:00'], amenities: ['parking', 'wifi', 'showers'] },
-  { id: 3, name: 'Cầu Lông SportZone', location: 'Bình Thạnh, TP.HCM', sport: 'Cầu lông', rating: 4.7, reviews: 56, price: 150000, distance: 2.1, image: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=500&h=320&fit=crop&auto=format', slots: ['05:00', '07:00', '18:00', '20:00'], amenities: ['lights', 'wifi'] },
-  { id: 4, name: 'Sân Bóng Rổ Landmark', location: 'Quận 1, TP.HCM', sport: 'Bóng rổ', rating: 4.6, reviews: 43, price: 200000, distance: 0.8, image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=500&h=320&fit=crop&auto=format', slots: ['08:00', '10:00', '17:00', '20:00'], amenities: ['parking', 'lights'] },
-  { id: 5, name: 'Sân 7 Người Hòa Bình', location: 'Gò Vấp, TP.HCM', sport: 'Bóng đá', rating: 4.5, reviews: 201, price: 420000, distance: 4.8, image: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=500&h=320&fit=crop&auto=format', slots: ['06:00', '18:00', '20:00'], amenities: ['parking', 'referee', 'wifi', 'lights'] },
-  { id: 6, name: 'Sân Pickleball Sky Garden', location: 'Phú Nhuận, TP.HCM', sport: 'Pickleball', rating: 4.9, reviews: 31, price: 180000, distance: 1.9, image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=500&h=320&fit=crop&auto=format', slots: ['06:00', '08:00', '10:00', '16:00'], amenities: ['lights', 'showers', 'wifi'] },
-  { id: 7, name: 'Sân Mini Gia Đình', location: 'Tân Bình, TP.HCM', sport: 'Bóng đá', rating: 4.3, reviews: 78, price: 250000, distance: 5.5, image: 'https://images.unsplash.com/photo-1459865264687-595d652de67e?w=500&h=320&fit=crop&auto=format', slots: ['07:00', '09:00', '17:00', '19:00'], amenities: ['lights'] },
-];
+const PROVINCES = ['An Giang', 'Bà Rịa - Vũng Tàu', 'Bạc Liêu', 'Bắc Giang', 'Bắc Kạn', 'Bắc Ninh', 'Bến Tre', 'Bình Dương', 'Bình Định', 'Bình Phước', 'Bình Thuận', 'Cà Mau', 'Cao Bằng', 'Cần Thơ', 'Đà Nẵng', 'Đắk Lắk', 'Đắk Nông', 'Điện Biên', 'Đồng Nai', 'Đồng Tháp', 'Gia Lai', 'Hà Giang', 'Hà Nam', 'Hà Nội', 'Hà Tĩnh', 'Hải Dương', 'Hải Phòng', 'Hậu Giang', 'Hòa Bình', 'Hưng Yên', 'Khánh Hòa', 'Kiên Giang', 'Kon Tum', 'Lai Châu', 'Lạng Sơn', 'Lào Cai', 'Lâm Đồng', 'Long An', 'Nam Định', 'Nghệ An', 'Ninh Bình', 'Ninh Thuận', 'Phú Thọ', 'Phú Yên', 'Quảng Bình', 'Quảng Nam', 'Quảng Ngãi', 'Quảng Ninh', 'Quảng Trị', 'Sóc Trăng', 'Sơn La', 'Tây Ninh', 'Thái Bình', 'Thái Nguyên', 'Thanh Hóa', 'Thừa Thiên Huế', 'Tiền Giang', 'TP.HCM', 'Trà Vinh', 'Tuyên Quang', 'Vĩnh Long', 'Vĩnh Phúc', 'Yên Bái'];
 
-const AMENITY_LABELS: Record<string, string> = { parking: 'Bãi đỗ xe', wifi: 'Wi-Fi', referee: 'Trọng tài', lights: 'Đèn sân', showers: 'Phòng tắm' };
 const SPORT_OPTIONS = ['Tất cả', 'Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball'];
 
 type SortKey = 'price-asc' | 'price-desc' | 'rating' | 'distance';
 
 export function SearchPage() {
   const navigate = useNavigate();
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialLocation = urlParams.get('location') || '';
+  const initialSport = urlParams.get('sport') || '';
+
   const [priceRange, setPriceRange] = useState(500000);
-  const [selectedSports, setSelectedSports] = useState<string[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<string>(initialLocation);
+  const [selectedSports, setSelectedSports] = useState<string[]>(initialSport && initialSport !== 'Tất cả' ? [initialSport] : []);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortKey>('rating');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [fields, setFields] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const fetchFields = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/fields');
+        if (res.ok) {
+          const data = await res.json();
+          setFields(data.filter((f: any) => f.active).map((f: any) => ({
+            ...f,
+            location: f.location || f.address,
+            rating: f.rating || 0,
+            reviews: f.reviews || 0,
+            distance: f.distance || (Math.random() * 5 + 1).toFixed(1),
+            slots: ['06:00', '08:00', '17:00', '19:00'], // dummy slots for now
+          })));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchFields();
+  }, []);
 
   const toggleSport = (sport: string) => setSelectedSports(prev => prev.includes(sport) ? prev.filter(s => s !== sport) : [...prev, sport]);
   const toggleAmenity = (a: string) => setSelectedAmenities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
+  
+  const availableAmenities = Array.from(new Set(fields.flatMap(f => f.amenities || [])));
 
-  const filtered = ALL_FIELDS
-    .filter(f => f.price <= priceRange)
+  const filtered = fields
+    .filter(f => selectedLocation === '' || (f.location || '').includes(selectedLocation))
+    .filter(f => (f.price || 0) <= priceRange)
     .filter(f => selectedSports.length === 0 || selectedSports.includes(f.sport))
-    .filter(f => selectedAmenities.every(a => f.amenities.includes(a)))
+    .filter(f => selectedAmenities.every(a => (f.amenities || []).includes(a)))
     .sort((a, b) => {
       if (sortBy === 'price-asc') return a.price - b.price;
       if (sortBy === 'price-desc') return b.price - a.price;
@@ -47,7 +69,7 @@ export function SearchPage() {
           <h1 style={{ fontFamily: 'Barlow Condensed, sans-serif' }} className="text-3xl font-extrabold text-gray-900 uppercase tracking-tight">
             Kết Quả Tìm Kiếm
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">Tìm thấy <strong>{filtered.length}</strong> sân tại TP.HCM</p>
+          <p className="text-gray-500 text-sm mt-0.5">Tìm thấy <strong>{filtered.length}</strong> sân {selectedLocation ? `tại ${selectedLocation}` : 'trên toàn quốc'}</p>
         </div>
         <div className="flex items-center gap-3">
           <select
@@ -78,6 +100,21 @@ export function SearchPage() {
         <aside className="w-64 shrink-0 hidden lg:block">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sticky top-24">
             <h2 className="font-bold text-gray-900 text-sm mb-4 uppercase tracking-wide">Bộ lọc</h2>
+
+            {/* Location */}
+            <div className="mb-5 pb-5 border-b border-gray-100">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3 block">Địa điểm</label>
+              <select
+                value={selectedLocation}
+                onChange={e => setSelectedLocation(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+              >
+                <option value="">Toàn quốc</option>
+                {PROVINCES.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
 
             {/* Price Range */}
             <div className="mb-5 pb-5 border-b border-gray-100">
@@ -117,22 +154,22 @@ export function SearchPage() {
             <div className="mb-5">
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3 block">Tiện ích</label>
               <div className="space-y-2">
-                {Object.entries(AMENITY_LABELS).map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2 cursor-pointer group">
+                {availableAmenities.map(a => (
+                  <label key={a} className="flex items-center gap-2 cursor-pointer group">
                     <input
                       type="checkbox"
-                      checked={selectedAmenities.includes(key)}
-                      onChange={() => toggleAmenity(key)}
+                      checked={selectedAmenities.includes(a)}
+                      onChange={() => toggleAmenity(a)}
                       className="w-4 h-4 rounded accent-green-600"
                     />
-                    <span className="text-sm text-gray-700 group-hover:text-green-700">{label}</span>
+                    <span className="text-sm text-gray-700 group-hover:text-green-700">{a}</span>
                   </label>
                 ))}
               </div>
             </div>
 
             <button
-              onClick={() => { setSelectedSports([]); setSelectedAmenities([]); setPriceRange(500000); }}
+              onClick={() => { setSelectedSports([]); setSelectedAmenities([]); setPriceRange(500000); setSelectedLocation(''); }}
               className="w-full py-2 rounded-lg text-sm text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-300 transition-colors"
             >
               Xóa bộ lọc
@@ -173,16 +210,16 @@ export function SearchPage() {
 
                       {/* Rating */}
                       <div className="flex items-center gap-1 mt-2">
-                        {[1,2,3,4,5].map(i => <svg key={i} className={`w-3.5 h-3.5 ${i <= Math.floor(field.rating) ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
+                        {[1,2,3,4,5].map(i => <svg key={i} className={`w-3.5 h-3.5 ${i <= Math.floor(field.rating || 5) ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
                         <span className="text-sm font-semibold text-gray-700 ml-1">{field.rating}</span>
                         <span className="text-xs text-gray-400">({field.reviews} đánh giá)</span>
                       </div>
 
                       {/* Amenities */}
                       <div className="flex flex-wrap gap-1.5 mt-3">
-                        {field.amenities.map(a => (
+                        {(field.amenities || []).map((a: string) => (
                           <span key={a} className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-0.5 text-xs text-gray-600">
-                            {AMENITY_LABELS[a]}
+                            {a}
                           </span>
                         ))}
                       </div>
@@ -192,7 +229,7 @@ export function SearchPage() {
                     <div className="mt-4 flex items-center justify-between flex-wrap gap-3">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs text-gray-500 font-medium">Khung giờ:</span>
-                        {field.slots.map(slot => (
+                        {(field.slots || []).map((slot: string) => (
                           <button key={slot} className="px-3 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200 hover:bg-green-600 hover:text-white transition-colors">
                             {slot}
                           </button>
@@ -215,20 +252,20 @@ export function SearchPage() {
                 <div
                   key={field.id}
                   onClick={() => navigate(`/field/${field.id}`)}
-                  className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md overflow-hidden cursor-pointer group transition-all hover:-translate-y-0.5"
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md overflow-hidden cursor-pointer group transition-all hover:-translate-y-0.5 flex flex-col h-full"
                 >
-                  <div className="h-44 overflow-hidden bg-gray-100">
+                  <div className="h-44 shrink-0 overflow-hidden bg-gray-100">
                     <img src={field.image} alt={field.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   </div>
-                  <div className="p-4">
-                    <h3 className="font-bold text-gray-900">{field.name}</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">{field.location}</p>
-                    <div className="flex items-center justify-between mt-3">
+                  <div className="p-4 flex-1 flex flex-col">
+                    <h3 className="font-bold text-gray-900 line-clamp-1">{field.name}</h3>
+                    <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{field.location}</p>
+                    <div className="flex items-center justify-between mt-auto pt-3">
                       <div className="flex items-center gap-1">
                         <svg className="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
                         <span className="text-sm font-medium">{field.rating}</span>
                       </div>
-                      <span className="text-green-600 font-bold">{field.price.toLocaleString('vi-VN')}đ/giờ</span>
+                      <span className="text-green-600 font-bold">{(field.price || 0).toLocaleString('vi-VN')}đ/giờ</span>
                     </div>
                     <button className="mt-3 w-full py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors">
                       Đặt Ngay

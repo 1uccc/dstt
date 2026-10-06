@@ -5,6 +5,14 @@ export function CustomerLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [session, setSession] = useState<{ role: string; email: string; name: string } | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sportbook-session') ?? 'null');
+    } catch {
+      return null;
+    }
+  });
 
   const navLinks = [
     { to: '/', label: 'Trang Chủ' },
@@ -13,6 +21,20 @@ export function CustomerLayout() {
   ];
 
   const isActive = (to: string) => location.pathname === to;
+  const initials = session?.name
+    ?.split(' ')
+    .slice(-2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'KH';
+
+  const logout = () => {
+    localStorage.removeItem('sportbook-session');
+    sessionStorage.removeItem('sportbook-pending-checkout');
+    setSession(null);
+    setProfileOpen(false);
+    navigate('/');
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -24,9 +46,9 @@ export function CustomerLayout() {
             <Link to="/" className="flex items-center gap-2">
               <div className="w-9 h-9 bg-green-600 rounded-lg flex items-center justify-center">
                 <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M7 12h10M12 7v10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" />
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M7 12h10M12 7v10" stroke="currentColor" strokeWidth="1.5" fill="none" />
                 </svg>
               </div>
               <span style={{ fontFamily: 'Barlow Condensed, sans-serif' }} className="text-xl font-800 text-gray-900 tracking-wide uppercase">
@@ -40,11 +62,10 @@ export function CustomerLayout() {
                 <Link
                   key={link.label}
                   to={link.to}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isActive(link.to)
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isActive(link.to)
                       ? 'bg-green-50 text-green-700'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   {link.label}
                 </Link>
@@ -53,12 +74,64 @@ export function CustomerLayout() {
 
             {/* Authentication */}
             <div className="flex items-center gap-3">
-              <button onClick={() => navigate('/auth')} className="hidden sm:block px-4 py-2 rounded-lg text-sm font-medium text-gray-700 border border-gray-200 hover:border-gray-300 transition-colors">
-                Đăng nhập
-              </button>
-              <button onClick={() => navigate('/auth?mode=register')} className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors shadow-sm">
-                Đăng ký
-              </button>
+              {session ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setProfileOpen((open) => !open)}
+                    aria-expanded={profileOpen}
+                    className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-1.5 pr-2.5 transition hover:border-green-300 hover:bg-green-50"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-600 text-xs font-bold text-white">{initials}</span>
+                    <span className="hidden max-w-32 truncate text-left sm:block">
+                      <span className="block truncate text-xs font-semibold text-gray-800">{session.name}</span>
+                      <span className="block text-[10px] text-gray-400">{session.role === 'customer' ? 'Khách hàng' : session.role === 'owner' ? 'Chủ sân' : 'Quản trị viên'}</span>
+                    </span>
+                    <svg className={`h-4 w-4 text-gray-400 transition ${profileOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                  {profileOpen && (
+                    <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-xl shadow-gray-900/10">
+                      <div className="border-b border-gray-100 px-4 py-3">
+                        <p className="truncate text-sm font-semibold text-gray-900">{session.name}</p>
+                        <p className="mt-0.5 truncate text-xs text-gray-500">{session.email}</p>
+                      </div>
+                      {session.role === 'owner' && (
+                        <button onClick={() => { setProfileOpen(false); navigate('/owner'); }} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50">
+                          Đến cổng Chủ sân
+                        </button>
+                      )}
+                      {session.role === 'admin' && (
+                        <button onClick={() => { setProfileOpen(false); navigate('/admin'); }} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50">
+                          Đến trang Quản trị
+                        </button>
+                      )}
+                      <button onClick={() => { setProfileOpen(false); navigate('/profile'); }} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                        Thông tin tài khoản
+                      </button>
+                      <button onClick={() => { setProfileOpen(false); navigate('/bookings'); }} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        Lịch sử đặt sân
+                      </button>
+                      <button onClick={logout} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-red-600 hover:bg-red-50">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4m4-3 3-3-3-3m3 3H9" /></svg>
+                        Đăng xuất
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <button onClick={() => navigate('/auth')} className="hidden sm:block px-4 py-2 rounded-lg text-sm font-medium text-gray-700 border border-gray-200 hover:border-gray-300 transition-colors">
+                    Đăng nhập
+                  </button>
+                  <button onClick={() => navigate('/auth?mode=register')} className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors shadow-sm">
+                    Đăng ký
+                  </button>
+                </>
+              )}
               <button
                 className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
                 onClick={() => setMobileOpen(!mobileOpen)}
@@ -100,7 +173,7 @@ export function CustomerLayout() {
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M7 12h10M12 7v10" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M7 12h10M12 7v10" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg>
                 </div>
                 <span style={{ fontFamily: 'Barlow Condensed, sans-serif' }} className="text-white font-bold text-lg uppercase tracking-wide">SportBookVN</span>
               </div>

@@ -1,27 +1,26 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type UserRole = 'customer' | 'owner' | 'admin';
+type UserStatus = 'active' | 'pending' | 'locked';
 
 interface UserItem {
-  id: number;
-  name: string;
+  id: string;
+  fullName: string;
   email: string;
   phone: string;
   role: UserRole;
-  joined: string;
-  bookings: number;
-  active: boolean;
+  status: UserStatus;
+  createdAt?: string;
+  businessInfo?: {
+    businessName?: string;
+    taxCode?: string;
+    city?: string;
+    district?: string;
+    address?: string;
+  };
 }
 
-const INITIAL_USERS: UserItem[] = [
-  { id: 1, name: 'Nguyễn Văn An', email: 'an.nguyen@gmail.com', phone: '0901 234 561', role: 'customer', joined: '12/09/2026', bookings: 14, active: true },
-  { id: 2, name: 'Trần Minh Hoàng', email: 'hoang@sportbook.vn', phone: '0901 234 562', role: 'owner', joined: '08/09/2026', bookings: 0, active: true },
-  { id: 3, name: 'Lê Thị Bích', email: 'bich.le@gmail.com', phone: '0901 234 563', role: 'customer', joined: '03/09/2026', bookings: 8, active: true },
-  { id: 4, name: 'Phạm Quốc Dũng', email: 'dung.pham@gmail.com', phone: '0901 234 564', role: 'customer', joined: '28/08/2026', bookings: 2, active: false },
-  { id: 5, name: 'Vũ Thanh Hà', email: 'ha@skyfield.vn', phone: '0901 234 565', role: 'owner', joined: '21/08/2026', bookings: 0, active: true },
-  { id: 6, name: 'Admin SportBookVN', email: 'admin@sportbook.vn', phone: '0901 234 566', role: 'admin', joined: '01/01/2026', bookings: 0, active: true },
-  { id: 7, name: 'Đặng Ngọc Mai', email: 'mai.dang@gmail.com', phone: '0901 234 567', role: 'customer', joined: '18/08/2026', bookings: 21, active: true },
-];
+const INITIAL_USERS: UserItem[] = [];
 
 const ROLE_LABEL: Record<UserRole, string> = {
   customer: 'Khách hàng',
@@ -39,34 +38,70 @@ export function AdminUsers() {
 
   const filtered = useMemo(() => users.filter((user) => {
     const keyword = search.toLowerCase();
-    const matches = user.name.toLowerCase().includes(keyword)
-      || user.email.toLowerCase().includes(keyword)
-      || user.phone.includes(keyword);
+    const name = user.fullName || '';
+    const email = user.email || '';
+    const phone = user.phone || '';
+    const matches = name.toLowerCase().includes(keyword)
+      || email.toLowerCase().includes(keyword)
+      || phone.includes(keyword);
     return matches && (role === 'all' || user.role === role);
   }), [users, search, role]);
 
-  const toggleUser = (id: number) => {
-    setUsers((current) => current.map((user) => user.id === id ? { ...user, active: !user.active } : user));
-    setSelected((current) => current?.id === id ? { ...current, active: !current.active } : current);
-    setNotice('Đã cập nhật trạng thái tài khoản.');
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:5000/api/users', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const changeUserStatus = async (id: string, newStatus: UserStatus) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/users/${id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        setUsers((current) => current.map((user) => user.id === id ? { ...user, status: newStatus } : user));
+        setSelected((current) => current?.id === id ? { ...current, status: newStatus } : current);
+        setNotice(newStatus === 'active' ? 'Đã duyệt/mở khóa tài khoản.' : 'Đã khóa tài khoản.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const addUser = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const newUser: UserItem = {
-      id: Date.now(),
-      name: String(data.get('name')),
+      id: Date.now().toString(),
+      fullName: String(data.get('name')),
       email: String(data.get('email')),
       phone: String(data.get('phone')),
       role: String(data.get('role')) as UserRole,
-      joined: '25/09/2026',
-      bookings: 0,
-      active: true,
+      status: 'active',
+      createdAt: new Date().toISOString(),
     };
     setUsers((current) => [newUser, ...current]);
     setShowAdd(false);
-    setNotice(`Đã tạo tài khoản cho ${newUser.name}.`);
+    setNotice(`Đã tạo tài khoản cho ${newUser.fullName}.`);
   };
 
   return (
@@ -82,7 +117,7 @@ export function AdminUsers() {
           ['Tổng người dùng', users.length],
           ['Khách hàng', users.filter((item) => item.role === 'customer').length],
           ['Chủ sân', users.filter((item) => item.role === 'owner').length],
-          ['Đang hoạt động', users.filter((item) => item.active).length],
+          ['Chờ duyệt', users.filter((item) => item.status === 'pending').length],
         ].map(([label, value]) => (
           <div key={String(label)} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
@@ -110,21 +145,24 @@ export function AdminUsers() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>{['Người dùng', 'Vai trò', 'Ngày tham gia', 'Lượt đặt', 'Trạng thái', 'Thao tác'].map((title) => <th key={title} className="whitespace-nowrap px-4 py-3 text-left font-semibold">{title}</th>)}</tr>
+              <tr>{['Người dùng', 'Vai trò', 'Trạng thái', 'Thao tác'].map((title) => <th key={title} className="whitespace-nowrap px-4 py-3 text-left font-semibold">{title}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((user) => (
                 <tr key={user.id} className="hover:bg-slate-50">
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700">{user.name.split(' ').slice(-2).map((part) => part[0]).join('')}</span>
-                      <div><p className="whitespace-nowrap font-medium text-slate-900">{user.name}</p><p className="text-xs text-slate-400">{user.email} · {user.phone}</p></div>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700">{(user.fullName || 'U').split(' ').slice(-2).map((part) => part[0]).join('')}</span>
+                      <div><p className="whitespace-nowrap font-medium text-slate-900">{user.fullName}</p><p className="text-xs text-slate-400">{user.email} · {user.phone}</p></div>
                     </div>
                   </td>
                   <td className="px-4 py-4"><span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${user.role === 'admin' ? 'bg-violet-50 text-violet-700' : user.role === 'owner' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{ROLE_LABEL[user.role]}</span></td>
-                  <td className="whitespace-nowrap px-4 py-4 text-slate-500">{user.joined}</td>
-                  <td className="px-4 py-4 text-slate-600">{user.bookings}</td>
-                  <td className="px-4 py-4"><span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium ${user.active ? 'text-green-700' : 'text-red-600'}`}><span className={`h-2 w-2 rounded-full ${user.active ? 'bg-green-500' : 'bg-red-400'}`} />{user.active ? 'Hoạt động' : 'Đã khóa'}</span></td>
+                  <td className="px-4 py-4">
+                    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium ${user.status === 'active' ? 'text-green-700' : user.status === 'pending' ? 'text-amber-600' : 'text-red-600'}`}>
+                      <span className={`h-2 w-2 rounded-full ${user.status === 'active' ? 'bg-green-500' : user.status === 'pending' ? 'bg-amber-400' : 'bg-red-400'}`} />
+                      {user.status === 'active' ? 'Hoạt động' : user.status === 'pending' ? 'Chờ duyệt' : 'Đã khóa'}
+                    </span>
+                  </td>
                   <td className="px-4 py-4"><button onClick={() => setSelected(user)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-50">Quản lý</button></td>
                 </tr>
               ))}
@@ -152,12 +190,35 @@ export function AdminUsers() {
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => setSelected(null)}>
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-lg font-bold text-green-700">{selected.name.split(' ').slice(-2).map((part) => part[0]).join('')}</span>
-            <h2 className="mt-4 font-semibold text-slate-900">{selected.name}</h2>
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-lg font-bold text-green-700">{(selected.fullName || 'U').split(' ').slice(-2).map((part) => part[0]).join('')}</span>
+            <h2 className="mt-4 font-semibold text-slate-900">{selected.fullName}</h2>
             <p className="mt-1 text-sm text-slate-500">{selected.email}</p>
             <span className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{ROLE_LABEL[selected.role]}</span>
-            <div className="mt-6 grid grid-cols-2 gap-3 text-left text-sm"><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-400">Ngày tham gia</p><p className="mt-1 font-medium text-slate-700">{selected.joined}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-400">Lượt đặt</p><p className="mt-1 font-medium text-slate-700">{selected.bookings}</p></div></div>
-            {selected.role !== 'admin' && <button onClick={() => toggleUser(selected.id)} className={`mt-6 w-full rounded-xl py-3 text-sm font-semibold ${selected.active ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-green-600 text-white hover:bg-green-700'}`}>{selected.active ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}</button>}
+
+            {selected.role === 'owner' && selected.businessInfo && (
+              <div className="mt-5 rounded-xl bg-slate-50 p-4 text-left text-sm">
+                <h3 className="mb-2 font-semibold text-slate-900">Thông tin đăng ký kinh doanh</h3>
+                <div className="grid gap-2 text-slate-600">
+                  <p><span className="font-medium text-slate-700">Tên đơn vị:</span> {selected.businessInfo.businessName || 'Không có'}</p>
+                  <p><span className="font-medium text-slate-700">MST:</span> {selected.businessInfo.taxCode || 'Không có'}</p>
+                  <p><span className="font-medium text-slate-700">Địa chỉ:</span> {[selected.businessInfo.address, selected.businessInfo.district, selected.businessInfo.city].filter(Boolean).join(', ') || 'Không có'}</p>
+                </div>
+              </div>
+            )}
+
+            {selected.role !== 'admin' && (
+              <div className="mt-6 flex flex-col gap-2">
+                {selected.status === 'pending' && (
+                  <button onClick={() => changeUserStatus(selected.id, 'active')} className="w-full rounded-xl bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700">Duyệt tài khoản</button>
+                )}
+                {selected.status === 'active' && (
+                  <button onClick={() => changeUserStatus(selected.id, 'locked')} className="w-full rounded-xl bg-red-50 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">Khóa tài khoản</button>
+                )}
+                {selected.status === 'locked' && (
+                  <button onClick={() => changeUserStatus(selected.id, 'active')} className="w-full rounded-xl bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700">Mở khóa tài khoản</button>
+                )}
+              </div>
+            )}
             <button onClick={() => setSelected(null)} className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-50">Đóng</button>
           </div>
         </div>
