@@ -69,7 +69,7 @@ export function Home() {
             <span className="text-green-400">Thể Thao</span> Ngay Hôm Nay
           </h1>
           <p className="text-gray-300 text-lg mb-10 max-w-xl mx-auto">
-            Hơn 500 sân thể thao tại TP.HCM — bóng đá, tennis, cầu lông, bóng rổ và nhiều hơn nữa.
+            Hơn 500 sân thể thao trên cả nước — bóng đá, tennis, cầu lông, bóng rổ và nhiều hơn nữa.
           </p>
 
           {/* Search Bar */}

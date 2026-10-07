@@ -66,13 +66,9 @@ const INITIAL_FORM: FormData = {
 function Brand() {
   return (
     <Link to="/" className="inline-flex items-center gap-3">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500 text-white shadow-lg shadow-green-950/20">
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 18V6l8-3 8 3v12l-8 3-8-3Zm0-12 8 3 8-3M12 9v12" />
-        </svg>
-      </span>
+      <img src="/logo.jpg" alt="Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-green-950/20" />
       <span>
-        <span className="block font-display text-xl font-bold uppercase tracking-wide text-white">SportBookVN</span>
+        <span className="block font-display text-xl font-bold uppercase tracking-wide text-white">SportBook</span>
         <span className="block text-xs text-green-300">Cổng đối tác sân</span>
       </span>
     </Link>

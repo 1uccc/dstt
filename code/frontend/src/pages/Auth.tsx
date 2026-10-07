@@ -4,7 +4,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signInWithPopup, 
-  GoogleAuthProvider 
+  GoogleAuthProvider,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 
@@ -45,6 +46,27 @@ export function Auth() {
     if (redirectTo?.startsWith('/')) nextParams.redirect = redirectTo;
     if (checkoutRequired) nextParams.reason = 'checkout';
     setSearchParams(nextParams);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Vui lòng nhập địa chỉ email của bạn để lấy lại mật khẩu.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setError('Đã gửi email khôi phục mật khẩu. Vui lòng kiểm tra hộp thư của bạn.');
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found') {
+        setError('Không tìm thấy tài khoản với email này.');
+      } else {
+        setError('Lỗi khi gửi email: ' + err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const syncUserToBackend = async (token: string, userData: any) => {
@@ -185,9 +207,9 @@ export function Auth() {
         <div className="absolute -bottom-40 -right-40 h-3/4 w-3/4 rounded-full bg-green-500/20 blur-3xl" />
 
         <Link to="/" className="relative z-10 flex w-fit items-center gap-3">
-          <BrandMark />
+          <img src="/logo.jpg" alt="Logo" className="w-11 h-11 rounded-xl object-cover shadow-lg shadow-green-950/30" />
           <span className="font-display text-2xl font-bold uppercase tracking-wide">
-            SportBook<span className="text-green-400">VN</span>
+            SportBook
           </span>
         </Link>
 
@@ -219,16 +241,16 @@ export function Auth() {
           </div>
         </div>
 
-        <p className="relative z-10 text-xs text-green-100/40">© 2026 SportBookVN. Đặt sân dễ dàng, chơi hết mình.</p>
+        <p className="relative z-10 text-xs text-green-100/40">© 2026 SportBook. Đặt sân dễ dàng, chơi hết mình.</p>
       </section>
 
       <section className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-8 lg:px-12">
         <div className="w-full max-w-md">
           <div className="mb-8 flex items-center justify-between lg:hidden">
             <Link to="/" className="flex items-center gap-3">
-              <BrandMark />
+              <img src="/logo.jpg" alt="Logo" className="w-11 h-11 rounded-xl object-cover shadow-lg shadow-green-950/30" />
               <span className="font-display text-xl font-bold uppercase tracking-wide text-slate-900">
-                SportBook<span className="text-green-600">VN</span>
+                SportBook
               </span>
             </Link>
             <Link to="/" className="text-sm font-medium text-slate-500 hover:text-green-700">Về trang chủ</Link>
@@ -298,7 +320,7 @@ export function Auth() {
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <label htmlFor="password" className="text-sm font-medium text-slate-700">Mật khẩu</label>
-                {mode === 'login' && <button type="button" className="text-xs font-medium text-green-700 hover:text-green-800">Quên mật khẩu?</button>}
+                {mode === 'login' && <button type="button" onClick={handleForgotPassword} disabled={loading} className="text-xs font-medium text-green-700 hover:text-green-800 disabled:opacity-50">Quên mật khẩu?</button>}
               </div>
               <div className="relative">
                 <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

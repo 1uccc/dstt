@@ -32,8 +32,8 @@ export function AdminUsers() {
   const [users, setUsers] = useState(INITIAL_USERS);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<'all' | UserRole>('all');
-  const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState<UserItem | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [notice, setNotice] = useState('');
 
   const filtered = useMemo(() => users.filter((user) => {
@@ -87,22 +87,38 @@ export function AdminUsers() {
     }
   };
 
-  const addUser = (event: FormEvent<HTMLFormElement>) => {
+  const saveUserInfo = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!selected) return;
+    
     const data = new FormData(event.currentTarget);
-    const newUser: UserItem = {
-      id: Date.now().toString(),
-      fullName: String(data.get('name')),
-      email: String(data.get('email')),
+    const updates = {
+      fullName: String(data.get('fullName')),
       phone: String(data.get('phone')),
       role: String(data.get('role')) as UserRole,
-      status: 'active',
-      createdAt: new Date().toISOString(),
     };
-    setUsers((current) => [newUser, ...current]);
-    setShowAdd(false);
-    setNotice(`Đã tạo tài khoản cho ${newUser.fullName}.`);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/users/${selected.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates)
+      });
+      if (res.ok) {
+        setUsers((current) => current.map((user) => user.id === selected.id ? { ...user, ...updates } : user));
+        setSelected({ ...selected, ...updates });
+        setIsEditing(false);
+        setNotice('Đã cập nhật thông tin người dùng.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
+
 
   return (
     <div className="space-y-5">
@@ -135,10 +151,6 @@ export function AdminUsers() {
               <option value="all">Tất cả vai trò</option>
               {Object.entries(ROLE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
-            <button onClick={() => setShowAdd(true)} className="flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth="2" d="M12 5v14M5 12h14" /></svg>
-              Thêm người dùng
-            </button>
           </div>
         </div>
 
@@ -172,54 +184,58 @@ export function AdminUsers() {
         </div>
       </div>
 
-      {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => setShowAdd(false)}>
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="border-b border-slate-100 px-6 py-5"><h2 className="font-semibold text-slate-900">Thêm người dùng mới</h2><p className="mt-1 text-xs text-slate-500">Tạo tài khoản và cấp quyền truy cập hệ thống.</p></div>
-            <form onSubmit={addUser} className="space-y-4 p-6">
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Họ và tên</label><input required name="name" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-green-500" /></div>
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Email</label><input required type="email" name="email" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-green-500" /></div>
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Số điện thoại</label><input required name="phone" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-green-500" /></div>
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Vai trò</label><select name="role" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-green-500"><option value="customer">Khách hàng</option><option value="owner">Chủ sân</option><option value="admin">Quản trị viên</option></select></div>
-              <div className="flex gap-3 pt-2"><button type="button" onClick={() => setShowAdd(false)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600">Hủy</button><button type="submit" className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700">Tạo tài khoản</button></div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => setSelected(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => { setSelected(null); setIsEditing(false); }}>
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-lg font-bold text-green-700">{(selected.fullName || 'U').split(' ').slice(-2).map((part) => part[0]).join('')}</span>
-            <h2 className="mt-4 font-semibold text-slate-900">{selected.fullName}</h2>
-            <p className="mt-1 text-sm text-slate-500">{selected.email}</p>
-            <span className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{ROLE_LABEL[selected.role]}</span>
-
-            {selected.role === 'owner' && selected.businessInfo && (
-              <div className="mt-5 rounded-xl bg-slate-50 p-4 text-left text-sm">
-                <h3 className="mb-2 font-semibold text-slate-900">Thông tin đăng ký kinh doanh</h3>
-                <div className="grid gap-2 text-slate-600">
-                  <p><span className="font-medium text-slate-700">Tên đơn vị:</span> {selected.businessInfo.businessName || 'Không có'}</p>
-                  <p><span className="font-medium text-slate-700">MST:</span> {selected.businessInfo.taxCode || 'Không có'}</p>
-                  <p><span className="font-medium text-slate-700">Địa chỉ:</span> {[selected.businessInfo.address, selected.businessInfo.district, selected.businessInfo.city].filter(Boolean).join(', ') || 'Không có'}</p>
+            
+            {isEditing ? (
+              <form onSubmit={saveUserInfo} className="mt-4 text-left space-y-3">
+                <div><label className="block text-xs font-semibold text-slate-500 mb-1">Họ và tên</label><input required name="fullName" defaultValue={selected.fullName} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-green-500" /></div>
+                <div><label className="block text-xs font-semibold text-slate-500 mb-1">Số điện thoại</label><input required name="phone" defaultValue={selected.phone} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-green-500" /></div>
+                <div><label className="block text-xs font-semibold text-slate-500 mb-1">Vai trò</label><select name="role" defaultValue={selected.role} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-green-500"><option value="customer">Khách hàng</option><option value="owner">Chủ sân</option><option value="admin">Quản trị viên</option></select></div>
+                <div className="flex gap-2 pt-2">
+                  <button type="button" onClick={() => setIsEditing(false)} className="flex-1 rounded-xl bg-slate-100 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">Hủy</button>
+                  <button type="submit" className="flex-1 rounded-xl bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-700">Lưu</button>
                 </div>
-              </div>
-            )}
+              </form>
+            ) : (
+              <>
+                <h2 className="mt-4 font-semibold text-slate-900">{selected.fullName}</h2>
+                <p className="mt-1 text-sm text-slate-500">{selected.email}</p>
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{ROLE_LABEL[selected.role]}</span>
+                  <button onClick={() => setIsEditing(true)} className="text-green-600 hover:text-green-700" title="Chỉnh sửa"><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+                </div>
 
-            {selected.role !== 'admin' && (
-              <div className="mt-6 flex flex-col gap-2">
-                {selected.status === 'pending' && (
-                  <button onClick={() => changeUserStatus(selected.id, 'active')} className="w-full rounded-xl bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700">Duyệt tài khoản</button>
+                {selected.role === 'owner' && selected.businessInfo && (
+                  <div className="mt-5 rounded-xl bg-slate-50 p-4 text-left text-sm">
+                    <h3 className="mb-2 font-semibold text-slate-900">Thông tin đăng ký kinh doanh</h3>
+                    <div className="grid gap-2 text-slate-600">
+                      <p><span className="font-medium text-slate-700">Tên đơn vị:</span> {selected.businessInfo.businessName || 'Không có'}</p>
+                      <p><span className="font-medium text-slate-700">MST:</span> {selected.businessInfo.taxCode || 'Không có'}</p>
+                      <p><span className="font-medium text-slate-700">Địa chỉ:</span> {[selected.businessInfo.address, selected.businessInfo.district, selected.businessInfo.city].filter(Boolean).join(', ') || 'Không có'}</p>
+                    </div>
+                  </div>
                 )}
-                {selected.status === 'active' && (
-                  <button onClick={() => changeUserStatus(selected.id, 'locked')} className="w-full rounded-xl bg-red-50 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">Khóa tài khoản</button>
+
+                {selected.role !== 'admin' && (
+                  <div className="mt-6 flex flex-col gap-2">
+                    {selected.status === 'pending' && (
+                      <button onClick={() => changeUserStatus(selected.id, 'active')} className="w-full rounded-xl bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700">Duyệt tài khoản</button>
+                    )}
+                    {selected.status === 'active' && (
+                      <button onClick={() => changeUserStatus(selected.id, 'locked')} className="w-full rounded-xl bg-red-50 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">Khóa tài khoản</button>
+                    )}
+                    {selected.status === 'locked' && (
+                      <button onClick={() => changeUserStatus(selected.id, 'active')} className="w-full rounded-xl bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700">Mở khóa tài khoản</button>
+                    )}
+                  </div>
                 )}
-                {selected.status === 'locked' && (
-                  <button onClick={() => changeUserStatus(selected.id, 'active')} className="w-full rounded-xl bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700">Mở khóa tài khoản</button>
-                )}
-              </div>
+                <button onClick={() => { setSelected(null); setIsEditing(false); }} className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-50">Đóng</button>
+              </>
             )}
-            <button onClick={() => setSelected(null)} className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-50">Đóng</button>
           </div>
         </div>
       )}

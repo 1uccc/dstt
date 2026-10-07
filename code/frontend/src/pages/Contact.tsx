@@ -3,7 +3,7 @@ import { FormEvent, useState } from 'react';
 const CONTACT_CHANNELS = [
   {
     title: 'Tổng đài hỗ trợ',
-    value: '1800 1234',
+    value: '0823468003',
     detail: 'Miễn phí · 07:00–22:00 mỗi ngày',
     icon: (
       <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -13,7 +13,7 @@ const CONTACT_CHANNELS = [
   },
   {
     title: 'Email',
-    value: 'support@sportbookvn.com',
+    value: 'bachtuocndl@gmail.com',
     detail: 'Phản hồi trong vòng 24 giờ',
     icon: (
       <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -44,10 +44,45 @@ export function Contact() {
   const [sent, setSent] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  const submitContact = (event: FormEvent<HTMLFormElement>) => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const submitContact = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSent(true);
-    event.currentTarget.reset();
+    const form = event.currentTarget;
+
+    // Safely cast elements
+    const elements = form.elements as any;
+    const data = {
+      fullName: elements['contact-name'].value,
+      phone: elements['contact-phone'].value,
+      email: elements['contact-email'].value,
+      subject: elements['contact-topic'].value,
+      content: elements['contact-message'].value,
+    };
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch('http://localhost:5000/api/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (res.ok) {
+        setSent(true);
+        form.reset();
+      } else {
+        const errData = await res.json();
+        setError(errData.message || 'Có lỗi xảy ra, vui lòng thử lại.');
+      }
+    } catch (err) {
+      setError('Lỗi kết nối đến máy chủ.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -59,7 +94,7 @@ export function Contact() {
           <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-green-400">Luôn sẵn sàng hỗ trợ</p>
           <h1 className="font-display text-5xl font-extrabold uppercase tracking-tight sm:text-6xl">Chúng tôi có thể giúp gì?</h1>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-green-100/70">
-            Gửi câu hỏi, góp ý hoặc yêu cầu hợp tác. Đội ngũ SportBookVN sẽ phản hồi bạn sớm nhất có thể.
+            Gửi câu hỏi, góp ý hoặc yêu cầu hợp tác. Đội ngũ SportBook sẽ phản hồi bạn sớm nhất có thể.
           </p>
         </div>
       </section>
@@ -80,7 +115,7 @@ export function Contact() {
           <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm sm:p-8">
             <div className="mb-7">
               <p className="text-sm font-semibold text-green-600">Gửi tin nhắn</p>
-              <h2 className="mt-1 font-display text-3xl font-bold uppercase tracking-tight text-slate-900">Liên hệ với SportBookVN</h2>
+              <h2 className="mt-1 font-display text-3xl font-bold uppercase tracking-tight text-slate-900">Liên hệ với SportBook</h2>
               <p className="mt-2 text-sm text-slate-500">Vui lòng điền đầy đủ thông tin để chúng tôi hỗ trợ chính xác hơn.</p>
             </div>
 
@@ -90,6 +125,13 @@ export function Contact() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m5 12 4 4L19 6" />
                 </svg>
                 <div><strong>Đã gửi yêu cầu.</strong> Chúng tôi sẽ liên hệ lại với bạn trong vòng 24 giờ.</div>
+              </div>
+            )}
+
+            {error && (
+              <div role="alert" className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                <svg className="mt-0.5 h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <div>{error}</div>
               </div>
             )}
 
@@ -122,11 +164,13 @@ export function Contact() {
                 <label htmlFor="contact-message" className="mb-1.5 block text-sm font-medium text-slate-700">Nội dung</label>
                 <textarea required id="contact-message" rows={5} placeholder="Mô tả vấn đề bạn đang gặp phải..." className="w-full resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-500/10" />
               </div>
-              <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-green-600/20 transition hover:bg-green-700 sm:w-auto">
-                Gửi yêu cầu
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m5 12 14-8-4 16-3-6-7-2Zm7 2 7-10" />
-                </svg>
+              <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-green-600/20 transition hover:bg-green-700 sm:w-auto disabled:opacity-50">
+                {loading ? 'Đang gửi...' : 'Gửi yêu cầu'}
+                {!loading && (
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m5 12 14-8-4 16-3-6-7-2Zm7 2 7-10" />
+                  </svg>
+                )}
               </button>
             </form>
           </div>

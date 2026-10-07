@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const NAV_ITEMS = [
   { to: '/admin', label: 'Tổng Quan', icon: (
@@ -14,6 +14,9 @@ const NAV_ITEMS = [
   { to: '/admin/users', label: 'Người Dùng', icon: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
   ) },
+  { to: '/admin/contacts', label: 'Liên Hệ', icon: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+  ) },
   { to: '/admin/settings', label: 'Cài Đặt', icon: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
   ) },
@@ -24,8 +27,68 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const [usersRes, bookingsRes] = await Promise.all([
+          fetch('http://localhost:5000/api/users', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('http://localhost:5000/api/bookings', { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        let notifs: any[] = [];
+        if (usersRes.ok) {
+          const users = await usersRes.json();
+          const pendingUsers = users.filter((u: any) => u.status === 'pending');
+          pendingUsers.forEach((u: any) => {
+            notifs.push({
+              id: `u-${u.id || u._id}`,
+              title: 'Tài khoản cần duyệt',
+              description: `${u.fullName} (${u.role === 'owner' ? 'Chủ sân' : 'Khách hàng'}) đang chờ duyệt.`,
+              time: 'Gần đây',
+              timestamp: new Date(u.createdAt || Date.now()).getTime(),
+              read: false,
+            });
+          });
+        }
+        if (bookingsRes.ok) {
+          const bookings = await bookingsRes.json();
+          const recentBookings = bookings.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 10);
+          recentBookings.forEach((b: any) => {
+            if (b.status === 'paid' || b.status === 'confirmed') {
+              notifs.push({
+                id: `b-${b.id || b._id}`,
+                title: 'Đơn đặt sân mới',
+                description: `Đơn #SPB-${(b._id || b.id || 'xxxx').slice(-4).toUpperCase()} đã được thanh toán.`,
+                time: 'Gần đây',
+                timestamp: new Date(b.createdAt || Date.now()).getTime(),
+                read: false,
+              });
+            } else if (b.status === 'cancelled') {
+              notifs.push({
+                id: `b-${b.id || b._id}`,
+                title: 'Đơn đặt sân bị hủy',
+                description: `Đơn #SPB-${(b._id || b.id || 'xxxx').slice(-4).toUpperCase()} đã bị hủy.`,
+                time: 'Gần đây',
+                timestamp: new Date(b.createdAt || Date.now()).getTime(),
+                read: false,
+              });
+            }
+          });
+        }
+        notifs.sort((a, b) => b.timestamp - a.timestamp);
+        setNotifications(notifs.slice(0, 10));
+      } catch (err) {
+        console.error('Error fetching admin notifications:', err);
+      }
+    };
+    fetchNotifications();
+  }, []);
 
   const isActive = (to: string) => to === '/admin' ? location.pathname === '/admin' : location.pathname.startsWith(to);
+  const todayDateString = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -34,11 +97,9 @@ export function AdminLayout() {
         {/* Logo */}
         <div className="px-5 py-5 border-b border-gray-800">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M7 12h10M12 7v10" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
-            </div>
+            <img src="/logo.jpg" alt="Logo" className="w-8 h-8 rounded-lg object-cover" />
             <div>
-              <div style={{ fontFamily: 'Barlow Condensed, sans-serif' }} className="text-white font-bold text-sm uppercase tracking-wide">SportBookVN</div>
+              <div style={{ fontFamily: 'Barlow Condensed, sans-serif' }} className="text-white font-bold text-sm uppercase tracking-wide">SportBook</div>
               <div className="text-gray-500 text-xs">Admin Panel</div>
             </div>
           </div>
@@ -69,7 +130,7 @@ export function AdminLayout() {
             <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold">AD</div>
             <div>
               <div className="text-white text-xs font-medium">Admin</div>
-              <div className="text-gray-500 text-xs">admin@sportbookvn.com</div>
+              <div className="text-gray-500 text-xs">admin@sportbook.com</div>
             </div>
           </div>
           <button
@@ -102,7 +163,7 @@ export function AdminLayout() {
               <h1 className="text-base font-semibold text-gray-900">
                 {NAV_ITEMS.find(n => isActive(n.to))?.label || 'Dashboard'}
               </h1>
-              <p className="text-xs text-gray-500">Thứ Sáu, 25 tháng 9 năm 2026</p>
+              <p className="text-xs text-gray-500">{todayDateString}</p>
             </div>
           </div>
           <div className="relative flex items-center gap-2">
@@ -115,21 +176,21 @@ export function AdminLayout() {
               <div className="absolute right-0 top-12 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                   <p className="text-sm font-semibold text-slate-900">Thông báo</p>
-                  <button onClick={() => setNotificationOpen(false)} className="text-xs font-medium text-green-700">Đánh dấu đã đọc</button>
+                  <button onClick={() => { setNotificationOpen(false); setNotifications([]); }} className="text-xs font-medium text-green-700">Đánh dấu đã đọc</button>
                 </div>
-                <div className="divide-y divide-slate-100">
-                  {[
-                    ['Đơn đặt sân mới', 'SPB-1091 vừa được thanh toán.', '2 phút trước'],
-                    ['Chủ sân mới đăng ký', 'Phú Nhuận Sports đang chờ xét duyệt.', '18 phút trước'],
-                    ['Báo cáo doanh thu', 'Báo cáo tuần này đã sẵn sàng.', '1 giờ trước'],
-                  ].map(([title, description, time]) => (
-                    <div key={title} className="px-4 py-3 hover:bg-slate-50">
-                      <div className="flex items-start gap-3">
-                        <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-green-500" />
-                        <div><p className="text-sm font-medium text-slate-800">{title}</p><p className="mt-0.5 text-xs text-slate-500">{description}</p><p className="mt-1 text-xs text-slate-400">{time}</p></div>
+                <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                  {notifications.length > 0 ? (
+                    notifications.map((n) => (
+                      <div key={n.id} className="px-4 py-3 hover:bg-slate-50">
+                        <div className="flex items-start gap-3">
+                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-green-500" />
+                          <div><p className="text-sm font-medium text-slate-800">{n.title}</p><p className="mt-0.5 text-xs text-slate-500">{n.description}</p><p className="mt-1 text-xs text-slate-400">{n.time}</p></div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <div className="px-4 py-6 text-center text-xs text-slate-500">Không có thông báo mới.</div>
+                  )}
                 </div>
               </div>
             )}

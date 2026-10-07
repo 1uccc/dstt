@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router';
 import { auth } from '../../config/firebase';
+import { QRCropModal } from '../../components/QRCropModal';
 
 interface Field {
   id: string;
@@ -18,6 +19,7 @@ interface Field {
   schedule?: FieldSchedule;
   ownerName?: string;
   owner?: string; // owner uid
+  active?: boolean;
 }
 
 interface FieldSchedule {
@@ -92,6 +94,30 @@ export function FieldManagement() {
   });
   const [form, setForm] = useState(emptyForm);
   const [blockedDate, setBlockedDate] = useState('');
+  const [cropTarget, setCropTarget] = useState<string | null>(null);
+
+  const uploadCroppedFile = async (croppedFile: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', croppedFile);
+      formData.append('upload_preset', 'datsanthethao');
+      
+      const res = await fetch('https://api.cloudinary.com/v1_1/vafqskfg/image/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await res.json();
+      if (data.secure_url) {
+        setForm(f => ({ ...f, images: [...(f.images || []), data.secure_url] }));
+        setCropTarget(null);
+      }
+    } catch (err) {
+      console.error('Lỗi upload ảnh:', err);
+      alert('Có lỗi khi tải ảnh lên. Vui lòng thử lại.');
+    }
+  };
+
   const defaultSchedule = createSchedule();
   const activeSchedule: FieldSchedule = {
     ...defaultSchedule,
@@ -465,31 +491,16 @@ export function FieldManagement() {
                     <input
                       type="file"
                       accept="image/*"
-                      multiple
                       className="hidden"
-                      onChange={async (e) => {
-                        const files = Array.from(e.target.files || []);
-                        if (files.length === 0) return;
-                        try {
-                          const newUrls = await Promise.all(files.map(async (file) => {
-                            const formData = new FormData();
-                            formData.append('file', file);
-                            formData.append('upload_preset', 'datsanthethao');
-                            
-                            const res = await fetch('https://api.cloudinary.com/v1_1/vafqskfg/image/upload', {
-                              method: 'POST',
-                              body: formData,
-                            });
-                            
-                            const data = await res.json();
-                            return data.secure_url;
-                          }));
-                          
-                          setForm(f => ({ ...f, images: [...(f.images || []), ...newUrls.filter(Boolean)] }));
-                        } catch (err) {
-                          console.error('Lỗi upload ảnh:', err);
-                          alert('Có lỗi khi tải ảnh lên. Vui lòng thử lại.');
-                        }
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          setCropTarget(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                        e.target.value = '';
                       }}
                     />
                   </label>
@@ -644,6 +655,15 @@ export function FieldManagement() {
             </div>
           </div>
         </div>
+      )}
+
+      {cropTarget && (
+        <QRCropModal
+          imageSrc={cropTarget}
+          aspectRatio={21/9}
+          onClose={() => setCropTarget(null)}
+          onCropComplete={(file) => uploadCroppedFile(file)}
+        />
       )}
     </div>
   );

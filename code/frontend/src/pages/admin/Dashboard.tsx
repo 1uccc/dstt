@@ -1,80 +1,18 @@
+import { useState, useEffect } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell
 } from 'recharts';
 import { Link } from 'react-router';
 
-const REVENUE_DATA = [
-  { date: '1/9', revenue: 12400000 }, { date: '3/9', revenue: 15800000 }, { date: '5/9', revenue: 14200000 },
-  { date: '7/9', revenue: 18600000 }, { date: '9/9', revenue: 21000000 }, { date: '11/9', revenue: 17400000 },
-  { date: '13/9', revenue: 23800000 }, { date: '15/9', revenue: 26200000 }, { date: '17/9', revenue: 22100000 },
-  { date: '19/9', revenue: 28900000 }, { date: '21/9', revenue: 32400000 }, { date: '23/9', revenue: 29800000 },
-  { date: '25/9', revenue: 35600000 },
-];
-
-const SPORT_DATA = [
-  { name: 'Bóng đá', value: 52 },
-  { name: 'Tennis', value: 21 },
-  { name: 'Cầu lông', value: 14 },
-  { name: 'Bóng rổ', value: 8 },
-  { name: 'Pickleball', value: 5 },
-];
-
-const COLORS = ['#16a34a', '#22c55e', '#4ade80', '#86efac', '#bbf7d0'];
-
-const RECENT_BOOKINGS = [
-  { id: '#SPB-1091', user: 'Nguyễn Văn An', field: 'Sân Bóng Đá Phú Thọ', datetime: '25/09/2026 · 17:00', price: 350000, status: 'paid' },
-  { id: '#SPB-1090', user: 'Trần Thị Bích', field: 'Tennis Center Thảo Điền', datetime: '25/09/2026 · 15:30', price: 280000, status: 'pending' },
-  { id: '#SPB-1089', user: 'Lê Minh Cường', field: 'Cầu Lông SportZone', datetime: '25/09/2026 · 07:00', price: 150000, status: 'paid' },
-  { id: '#SPB-1088', user: 'Phạm Thu Dung', field: 'Sân Bóng Rổ Landmark', datetime: '24/09/2026 · 20:00', price: 200000, status: 'cancelled' },
-  { id: '#SPB-1087', user: 'Hoàng Văn Em', field: 'Sân 7 Người Hòa Bình', datetime: '24/09/2026 · 19:00', price: 420000, status: 'paid' },
-  { id: '#SPB-1086', user: 'Vũ Thị Phương', field: 'Sân Pickleball Sky Garden', datetime: '24/09/2026 · 16:00', price: 180000, status: 'pending' },
-];
+const COLORS = ['#16a34a', '#22c55e', '#4ade80', '#86efac', '#bbf7d0', '#0ea5e9', '#3b82f6'];
 
 const STATUS_CONFIG = {
   paid: { label: 'Đã thanh toán', cls: 'bg-green-100 text-green-700 border border-green-200' },
+  confirmed: { label: 'Đã xác nhận', cls: 'bg-green-100 text-green-700 border border-green-200' },
   pending: { label: 'Chờ thanh toán', cls: 'bg-amber-100 text-amber-700 border border-amber-200' },
   cancelled: { label: 'Đã hủy', cls: 'bg-red-100 text-red-600 border border-red-200' },
 };
-
-const METRICS = [
-  {
-    label: 'Doanh Thu Tháng 9',
-    value: '248,600,000đ',
-    change: '+18.4%',
-    positive: true,
-    icon: '💰',
-    sub: 'so với tháng trước',
-    sparkData: [12, 19, 14, 25, 22, 30, 28, 36],
-  },
-  {
-    label: 'Đặt Sân Đang Hoạt Động',
-    value: '143',
-    change: '+23',
-    positive: true,
-    icon: '📋',
-    sub: 'hôm nay',
-    sparkData: [40, 55, 48, 70, 65, 80, 90, 143],
-  },
-  {
-    label: 'Tổng Số Sân',
-    value: '42',
-    change: '+3',
-    positive: true,
-    icon: '🏟️',
-    sub: 'sân mới tháng này',
-    sparkData: [30, 32, 33, 35, 36, 38, 40, 42],
-  },
-  {
-    label: 'Người Dùng Mới',
-    value: '1,284',
-    change: '+12.1%',
-    positive: true,
-    icon: '👥',
-    sub: 'trong 30 ngày qua',
-    sparkData: [800, 900, 950, 1050, 1100, 1180, 1240, 1284],
-  },
-];
 
 function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
   const max = Math.max(...data);
@@ -109,6 +47,105 @@ function formatRevenue(value: number) {
 }
 
 export function AdminDashboard() {
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [fields, setFields] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const [bookingsRes, fieldsRes, usersRes] = await Promise.all([
+          fetch('http://localhost:5000/api/bookings', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('http://localhost:5000/api/fields'),
+          fetch('http://localhost:5000/api/users', { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        if (bookingsRes.ok) setBookings(await bookingsRes.json());
+        if (fieldsRes.ok) setFields(await fieldsRes.json());
+        if (usersRes.ok) setUsers(await usersRes.json());
+      } catch (err) {
+        console.error('Error fetching admin dashboard data:', err);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const totalRevenue = bookings.filter(b => b.status === 'paid' || b.status === 'confirmed').reduce((sum, b) => sum + (b.amount || 0), 0);
+  
+  const METRICS = [
+    {
+      label: 'Tổng Doanh Thu',
+      value: `${totalRevenue.toLocaleString('vi-VN')}đ`,
+      change: 'Cập nhật',
+      positive: true,
+      icon: '💰',
+      sub: 'thực tế',
+      sparkData: [12, 19, 14, 25, 22, 30, 28, 36],
+    },
+    {
+      label: 'Tổng Lượt Đặt Sân',
+      value: bookings.length.toString(),
+      change: 'Hoạt động',
+      positive: true,
+      icon: '📋',
+      sub: 'đang xử lý',
+      sparkData: [40, 55, 48, 70, 65, 80, 90, 143],
+    },
+    {
+      label: 'Tổng Số Sân',
+      value: fields.length.toString(),
+      change: 'Sẵn sàng',
+      positive: true,
+      icon: '🏟️',
+      sub: 'sân đang cho thuê',
+      sparkData: [30, 32, 33, 35, 36, 38, 40, 42],
+    },
+    {
+      label: 'Tổng Người Dùng',
+      value: users.length.toString(),
+      change: 'Thành viên',
+      positive: true,
+      icon: '👥',
+      sub: 'đã đăng ký',
+      sparkData: [800, 900, 950, 1050, 1100, 1180, 1240, 1284],
+    },
+  ];
+
+  const sportCounts: Record<string, number> = {};
+  fields.forEach(f => {
+    const s = f.sport || 'Khác';
+    sportCounts[s] = (sportCounts[s] || 0) + 1;
+  });
+  const SPORT_DATA = Object.entries(sportCounts).map(([name, count]) => ({
+    name,
+    value: Math.round((count / (fields.length || 1)) * 100)
+  }));
+
+  const revenueMap: Record<string, number> = {};
+  bookings.forEach(b => {
+    if ((b.status === 'paid' || b.status === 'confirmed') && b.date) {
+      revenueMap[b.date] = (revenueMap[b.date] || 0) + (b.amount || 0);
+    }
+  });
+  const sortedDates = Object.keys(revenueMap).sort();
+  const REVENUE_DATA = sortedDates.length > 0 
+    ? sortedDates.map(date => ({ date: date.slice(5), revenue: revenueMap[date] })) 
+    : [{ date: 'Chưa có', revenue: 0 }];
+
+  const RECENT_BOOKINGS = bookings
+    .slice()
+    .sort((a, b) => (new Date(b.createdAt || 0)).getTime() < (new Date(a.createdAt || 0)).getTime() ? 1 : -1)
+    .slice(0, 6)
+    .map(b => ({
+      id: `#SPB-${(b._id || b.id || 'xxxx').slice(-4).toUpperCase()}`,
+      user: b.customerName || 'Khách hàng',
+      field: b.fieldName || 'Sân thể thao',
+      datetime: `${b.date} · ${b.time}`,
+      price: b.amount || 0,
+      status: b.status || 'pending',
+    }));
+
   return (
     <div className="space-y-6">
       {/* Metric Cards */}

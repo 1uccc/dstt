@@ -44,15 +44,9 @@ export function CustomerLayout() {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-green-600 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" />
-                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                  <path d="M7 12h10M12 7v10" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                </svg>
-              </div>
+              <img src="/logo.jpg" alt="Logo" className="w-9 h-9 rounded-lg object-cover" />
               <span style={{ fontFamily: 'Barlow Condensed, sans-serif' }} className="text-xl font-800 text-gray-900 tracking-wide uppercase">
-                SportBook<span className="text-green-600">VN</span>
+                SportBook
               </span>
             </Link>
 
@@ -63,8 +57,8 @@ export function CustomerLayout() {
                   key={link.label}
                   to={link.to}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isActive(link.to)
-                      ? 'bg-green-50 text-green-700'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    ? 'bg-green-50 text-green-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
                 >
                   {link.label}
@@ -172,17 +166,15 @@ export function CustomerLayout() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M7 12h10M12 7v10" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg>
-                </div>
-                <span style={{ fontFamily: 'Barlow Condensed, sans-serif' }} className="text-white font-bold text-lg uppercase tracking-wide">SportBookVN</span>
+                <img src="/logo.jpg" alt="Logo" className="w-8 h-8 rounded-lg object-cover" />
+                <span style={{ fontFamily: 'Barlow Condensed, sans-serif' }} className="text-white font-bold text-lg uppercase tracking-wide">SportBook</span>
               </div>
               <p className="text-sm leading-relaxed">Nền tảng đặt sân thể thao trực tuyến hàng đầu Việt Nam.</p>
             </div>
             {[
               { title: 'Dịch vụ', links: ['Sân bóng đá', 'Sân tennis', 'Sân cầu lông', 'Sân bóng rổ'] },
               { title: 'Hỗ trợ', links: ['Câu hỏi thường gặp', 'Chính sách hoàn tiền', 'Điều khoản dịch vụ', 'Bảo mật'] },
-              { title: 'Liên hệ', links: ['support@sportbookvn.com', '1800 1234 (Miễn phí)', 'TP. Hồ Chí Minh, VN'] },
+              { title: 'Liên hệ', links: ['bachtuocndl@gmail.com', '082348003(Miễn phí)', 'Việt Nam'] },
             ].map(col => (
               <div key={col.title}>
                 <h4 className="text-white font-semibold text-sm mb-3">{col.title}</h4>
@@ -193,7 +185,7 @@ export function CustomerLayout() {
             ))}
           </div>
           <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-xs">© 2026 SportBookVN. Bảo lưu mọi quyền.</p>
+            <p className="text-xs">© 2026 SportBook.</p>
             <div className="flex items-center gap-3">
               {['Facebook', 'Instagram', 'YouTube', 'TikTok'].map(s => (
                 <button key={s} className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-green-600 flex items-center justify-center transition-colors">

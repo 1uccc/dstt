@@ -14,6 +14,7 @@ router.put('/password', verifyToken, userController.updatePassword);
 
 // Các API dành cho Admin
 router.get('/', verifyToken, checkRole(['admin']), userController.getAllUsers);
+router.put('/:id', verifyToken, checkRole(['admin']), userController.updateUserInfo);
 router.put('/:id/status', verifyToken, checkRole(['admin']), userController.updateUserStatus);
 
 module.exports = router;

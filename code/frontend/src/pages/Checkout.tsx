@@ -16,9 +16,10 @@ type OwnerPaymentSettings = {
   qrCodes: Record<string, string>;
 };
 
-function getOwnerPaymentSettings(): OwnerPaymentSettings {
+function getOwnerPaymentSettings(uid?: string): OwnerPaymentSettings {
   try {
-    const saved = localStorage.getItem('sportbook-owner-payment');
+    const key = uid ? `sportbook-owner-payment-${uid}` : 'sportbook-owner-payment';
+    const saved = localStorage.getItem(key);
     if (saved) {
       const parsed = JSON.parse(saved);
       return {
@@ -66,7 +67,27 @@ export function Checkout() {
   const subtotal = state.total || 700000;
   const total = subtotal;
 
-  const [ownerPayment] = useState(getOwnerPaymentSettings);
+  const [ownerPayment, setOwnerPayment] = useState(getOwnerPaymentSettings());
+  const [fieldData, setFieldData] = useState<any>(null);
+  
+  useEffect(() => {
+    async function fetchOwner() {
+      if (fieldId) {
+        try {
+          const res = await fetch(`http://localhost:5000/api/fields/${fieldId}`);
+          if (res.ok) {
+            const data = await res.json();
+            setFieldData(data);
+            if (data.owner) {
+              setOwnerPayment(getOwnerPaymentSettings(data.owner));
+            }
+          }
+        } catch (e) {}
+      }
+    }
+    fetchOwner();
+  }, [fieldId]);
+
   const configuredMethods = PAYMENT_METHODS.filter((method) => ownerPayment.enabledMethods.includes(method.id));
   const availableMethods = configuredMethods.length > 0 ? configuredMethods : PAYMENT_METHODS.filter((method) => method.id === 'card');
   const [selectedMethod, setSelectedMethod] = useState(availableMethods[0].id);
@@ -262,32 +283,6 @@ export function Checkout() {
             </div>
           </div>
 
-          {/* Discount Code */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h2 className="font-bold text-gray-900 mb-3">Mã Giảm Giá</h2>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Nhập mã giảm giá (thử: SPORT10)"
-                value={discountCode}
-                onChange={e => setDiscountCode(e.target.value)}
-                disabled={discountApplied}
-                className="flex-1 px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-50 disabled:text-gray-400 font-mono uppercase"
-              />
-              <button
-                onClick={handleApplyCode}
-                disabled={discountApplied || !discountCode}
-                className="px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {discountApplied ? '✓ Áp dụng' : 'Áp dụng'}
-              </button>
-            </div>
-            {discountApplied && (
-              <p className="text-xs text-green-700 mt-2 flex items-center gap-1">
-                <span>✓</span> Đã áp dụng giảm 10% — tiết kiệm {discount.toLocaleString('vi-VN')}đ
-              </p>
-            )}
-          </div>
 
           {/* Trust Badges */}
           <div className="flex items-center justify-center gap-6 py-4 flex-wrap">
@@ -316,14 +311,14 @@ export function Checkout() {
               {/* Field info */}
               <div className="flex gap-3 mb-4 pb-4 border-b border-gray-100">
                 <img
-                  src="https://images.unsplash.com/photo-1551854838-212c50b4c184?w=120&h=80&fit=crop&auto=format"
+                  src={fieldData?.images?.[0] || fieldData?.image || "https://images.unsplash.com/photo-1551854838-212c50b4c184?w=120&h=80&fit=crop&auto=format"}
                   alt="Field"
                   className="w-16 h-12 rounded-xl object-cover bg-gray-100"
                 />
                 <div>
                   <h3 className="font-semibold text-gray-900 text-sm leading-tight">{fieldName}</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Quận 11, TP.HCM</p>
-                  <span className="inline-block mt-1 bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full border border-green-100">Bóng đá</span>
+                  <p className="text-xs text-gray-500 mt-0.5">{fieldData?.address || fieldData?.location || 'Đang tải...'}</p>
+                  <span className="inline-block mt-1 bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full border border-green-100">{fieldData?.sport || 'Thể thao'}</span>
                 </div>
               </div>
 

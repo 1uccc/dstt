@@ -93,8 +93,26 @@ export function FieldDetail() {
   const [submittingReview, setSubmittingReview] = useState(false);
   
   const today = new Date();
-  const [calMonth] = useState(today.getMonth());
-  const [calYear] = useState(today.getFullYear());
+  const [calMonth, setCalMonth] = useState(today.getMonth());
+  const [calYear, setCalYear] = useState(today.getFullYear());
+
+  const prevMonth = () => {
+    if (calMonth === 0) {
+      setCalMonth(11);
+      setCalYear(prev => prev - 1);
+    } else {
+      setCalMonth(prev => prev - 1);
+    }
+  };
+
+  const nextMonth = () => {
+    if (calMonth === 11) {
+      setCalMonth(0);
+      setCalYear(prev => prev + 1);
+    } else {
+      setCalMonth(prev => prev + 1);
+    }
+  };
 
   useEffect(() => {
     const fetchField = async () => {
@@ -210,7 +228,7 @@ export function FieldDetail() {
     if (sessionStr) {
       const sessionObj = JSON.parse(sessionStr);
       isCustomer = sessionObj.role === 'customer';
-      customerName = sessionObj.user?.displayName || sessionObj.user?.fullName || 'Khách hàng';
+      customerName = sessionObj.name || 'Khách hàng';
     }
   } catch {}
 
@@ -286,12 +304,12 @@ export function FieldDetail() {
           )}
         </div>
         {displayImages.length > 1 && (
-          <div className="hidden sm:flex flex-col gap-2 col-span-1">
+          <div className="hidden sm:flex flex-col gap-2 col-span-1 h-full">
             {displayImages.slice(0, 3).map((img: string, i: number) => (
               <div
                 key={i}
                 onClick={() => setActiveImg(i)}
-                className={`flex-1 cursor-pointer overflow-hidden rounded-lg bg-gray-100 border-2 transition-colors ${activeImg === i ? 'border-green-500' : 'border-transparent'}`}
+                className={`flex-1 min-h-0 cursor-pointer overflow-hidden rounded-lg bg-gray-100 border-2 transition-colors ${activeImg === i ? 'border-green-500' : 'border-transparent'}`}
               >
                 <img src={img} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
               </div>
@@ -470,7 +488,6 @@ export function FieldDetail() {
                   <span className="text-white text-2xl font-bold">{(ownerSchedule?.regularPrice ?? PRICE_PER_SLOT).toLocaleString('vi-VN')}đ</span>
                   <span className="text-green-200 text-sm">/1.5 giờ</span>
                 </div>
-                <p className="text-green-100 text-xs mt-0.5">Đặt cọc 50% khi xác nhận</p>
               </div>
 
               <div className="p-5">
@@ -480,8 +497,8 @@ export function FieldDetail() {
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-semibold text-gray-800">{monthNames[calMonth]} {calYear}</span>
                     <div className="flex gap-1">
-                      <button className="w-6 h-6 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 text-xs">‹</button>
-                      <button className="w-6 h-6 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 text-xs">›</button>
+                      <button onClick={prevMonth} className="w-6 h-6 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 text-xs">‹</button>
+                      <button onClick={nextMonth} className="w-6 h-6 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 text-xs">›</button>
                     </div>
                   </div>
                   <div className="grid grid-cols-7 gap-0.5">

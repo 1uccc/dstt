@@ -36,6 +36,17 @@ export function OwnerLayout() {
   const [businessName, setBusinessName] = useState('Đơn vị đối tác');
   const [fieldCount, setFieldCount] = useState(0);
 
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      localStorage.removeItem('token');
+      localStorage.removeItem('sportbook-session');
+      navigate('/auth');
+    } catch (err) {
+      console.error('Logout error', err);
+    }
+  };
+
   useEffect(() => {
     // Lấy thông tin session
     const sessionStr = localStorage.getItem('sportbook-session');
@@ -106,11 +117,9 @@ export function OwnerLayout() {
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-green-950 text-white transition-transform duration-200 lg:relative lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="border-b border-white/10 px-5 py-5">
           <Link to="/owner" className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500 text-white shadow-lg shadow-green-950/30">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 18V6l8-3 8 3v12l-8 3-8-3zm0-12l8 3 8-3M12 9v12" /></svg>
-            </span>
+            <img src="/logo.jpg" alt="Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-green-950/30" />
             <span>
-              <span className="block font-display text-xl font-bold uppercase tracking-wide">SportBookVN</span>
+              <span className="block font-display text-xl font-bold uppercase tracking-wide">SportBook</span>
               <span className="block text-xs text-green-300">Cổng dành cho chủ sân</span>
             </span>
           </Link>
@@ -157,10 +166,16 @@ export function OwnerLayout() {
               <p className="truncate text-xs text-green-300">Chủ sân</p>
             </div>
           </div>
-          <button onClick={() => navigate('/auth')} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs text-green-200 transition-colors hover:bg-white/10 hover:text-white">
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4m-2-10h6m0 0v6m0-6L10 14" /></svg>
-            Xem trang khách hàng
-          </button>
+          <div className="space-y-1">
+            <button onClick={() => navigate('/')} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs text-green-200 transition-colors hover:bg-white/10 hover:text-white">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4m-2-10h6m0 0v6m0-6L10 14" /></svg>
+              Xem trang khách hàng
+            </button>
+            <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs text-red-300 transition-colors hover:bg-red-950/50 hover:text-red-200">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+              Đăng xuất
+            </button>
+          </div>
         </div>
       </aside>
 

@@ -87,7 +87,39 @@ export function OwnerDashboard() {
   const REVENUE = Object.keys(revenueByDay).map(day => ({ day, value: revenueByDay[day as keyof typeof revenueByDay] }));
   const totalRevenue = REVENUE.reduce((sum, item) => sum + item.value, 0);
 
-  const topBookings = bookings.slice(0, 5);
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentTimeString = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
+
+  const topBookings = todaysBookings
+    .filter(b => b.time.split(' - ')[0] >= currentTimeString)
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .slice(0, 5);
+
+  let peakTime = "Chưa có dữ liệu";
+  let peakOccupancy = 0;
+  if (todaysBookings.length > 0) {
+    const timeCount: Record<string, number> = {};
+    todaysBookings.forEach(b => {
+      if (b.time) {
+        timeCount[b.time] = (timeCount[b.time] || 0) + 1;
+      }
+    });
+    let maxTime = "";
+    let maxCount = 0;
+    Object.keys(timeCount).forEach(time => {
+      if (timeCount[time] > maxCount) {
+        maxCount = timeCount[time];
+        maxTime = time;
+      }
+    });
+    if (maxTime) {
+      peakTime = maxTime;
+      const totalMyFields = myFields.length > 0 ? myFields.length : 1;
+      peakOccupancy = Math.min(100, Math.round((maxCount / totalMyFields) * 100));
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -154,12 +186,14 @@ export function OwnerDashboard() {
           </div>
           <div className="space-y-5">
             {myFields.map((field) => {
-              const maxBookings = Math.max(10, Math.max(...myFields.map(f => f.bookings || 0)));
-              const value = Math.round(((field.bookings || 0) / maxBookings) * 100);
+              const fieldTodaysBookings = todaysBookings.filter(b => b.fieldName === field.name).length;
+              // Assume a typical operating day has around 14 bookable slots
+              const maxSlots = 14; 
+              const value = Math.min(100, Math.round((fieldTodaysBookings / maxSlots) * 100));
               return (
                 <div key={field.name}>
                   <div className="mb-2 flex items-end justify-between">
-                    <div><p className="text-sm font-semibold text-slate-800">{field.name}</p><p className="text-xs text-slate-500">{field.bookings || 0} lượt</p></div>
+                    <div><p className="text-sm font-semibold text-slate-800">{field.name}</p><p className="text-xs text-slate-500">{fieldTodaysBookings} lượt (hôm nay)</p></div>
                     <span className="font-display text-xl font-bold text-slate-900">{value}%</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${value}%` }} /></div>
@@ -171,15 +205,17 @@ export function OwnerDashboard() {
             )}
           </div>
           <div className="mt-6 rounded-xl bg-green-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-green-800">Khung giờ cao điểm</p>
-            <p className="mt-1 text-sm font-medium text-green-950">17:00 – 21:00 · Lấp đầy 96%</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-green-800">Khung giờ cao điểm hôm nay</p>
+            <p className="mt-1 text-sm font-medium text-green-950">
+              {peakTime !== "Chưa có dữ liệu" ? `${peakTime} · Lấp đầy ${peakOccupancy}%` : "Chưa có đủ dữ liệu"}
+            </p>
           </div>
         </div>
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <div><p className="font-display text-xl font-bold uppercase text-slate-900">Lịch sân hôm nay</p><p className="text-sm text-slate-500">5 lượt đặt tiếp theo</p></div>
+          <div><p className="font-display text-xl font-bold uppercase text-slate-900">Lịch sân hôm nay</p><p className="text-sm text-slate-500">{topBookings.length} lượt đặt tiếp theo</p></div>
           <Link to="/owner/bookings" className="inline-flex items-center gap-1 text-sm font-semibold text-green-700">Xem tất cả <span aria-hidden="true">→</span></Link>
         </div>
         <div className="overflow-x-auto">

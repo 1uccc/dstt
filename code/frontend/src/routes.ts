@@ -15,6 +15,7 @@ import { Contact } from './pages/Contact';
 import { AdminBookings } from './pages/admin/Bookings';
 import { AdminUsers } from './pages/admin/Users';
 import { AdminSettings } from './pages/admin/Settings';
+import { AdminContacts } from './pages/admin/Contacts';
 import { OwnerRegistration } from './pages/OwnerRegistration';
 import { OwnerPaymentSettings } from './pages/owner/PaymentSettings';
 import { ProfileSettings } from './pages/ProfileSettings';
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
       { path: 'fields', Component: FieldManagement },
       { path: 'bookings', Component: AdminBookings },
       { path: 'users', Component: AdminUsers },
+      { path: 'contacts', Component: AdminContacts },
       { path: 'settings', Component: AdminSettings },
     ],
   },

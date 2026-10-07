@@ -97,3 +97,28 @@ exports.updateUserStatus = async (req, res) => {
     res.status(500).json({ message: 'Lỗi server.', error: error.message });
   }
 };
+
+// [ADMIN] Cập nhật thông tin người dùng
+exports.updateUserInfo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fullName, phone, role } = req.body;
+    const userRef = db.collection('users').doc(id);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ message: 'Không tìm thấy người dùng.' });
+    }
+
+    const updates = {};
+    if (fullName !== undefined) updates.fullName = fullName;
+    if (phone !== undefined) updates.phone = phone;
+    if (role !== undefined) updates.role = role;
+
+    await userRef.update(updates);
+    res.json({ message: 'Cập nhật thông tin thành công.', updates });
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server.', error: error.message });
+  }
+};
+

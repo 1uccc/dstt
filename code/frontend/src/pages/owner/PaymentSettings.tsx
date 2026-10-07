@@ -1,4 +1,6 @@
-import { ChangeEvent, useState } from 'react';
+import { ChangeEvent, useState, useEffect } from 'react';
+import { auth } from '../../config/firebase';
+import { QRCropModal } from '../../components/QRCropModal';
 
 const PAYMENT_METHODS = [
   { id: 'zalopay', name: 'ZaloPay', detail: 'Ví điện tử', mark: 'Z', tone: 'bg-blue-600 text-white' },
@@ -17,9 +19,9 @@ type SavedPaymentSettings = {
   qrCodes: Record<string, string>;
 };
 
-function getSavedSettings(): SavedPaymentSettings | null {
+function getSavedSettings(uid: string): SavedPaymentSettings | null {
   try {
-    const value = localStorage.getItem(STORAGE_KEY);
+    const value = localStorage.getItem(`${STORAGE_KEY}-${uid}`);
     if (!value) return null;
     const parsed = JSON.parse(value);
     return {
@@ -35,24 +37,53 @@ function getSavedSettings(): SavedPaymentSettings | null {
 }
 
 export function OwnerPaymentSettings() {
-  const savedSettings = getSavedSettings();
-  const [bank, setBank] = useState(savedSettings?.bank ?? 'Vietcombank');
-  const [accountNumber, setAccountNumber] = useState(savedSettings?.accountNumber ?? '0123456789');
-  const [accountName, setAccountName] = useState(savedSettings?.accountName ?? 'NGUYEN MINH HOANG');
+  const [uid, setUid] = useState<string>('');
+  const [bank, setBank] = useState('Vietcombank');
+  const [accountNumber, setAccountNumber] = useState('0123456789');
+  const [accountName, setAccountName] = useState('NGUYEN MINH HOANG');
   const [saved, setSaved] = useState(false);
-  const [enabledMethods, setEnabledMethods] = useState(savedSettings?.enabledMethods ?? PAYMENT_METHODS.map((method) => method.id));
-  const [qrCodes, setQrCodes] = useState<Record<string, string>>(savedSettings?.qrCodes ?? {});
+  const [enabledMethods, setEnabledMethods] = useState(PAYMENT_METHODS.map((method) => method.id));
+  const [qrCodes, setQrCodes] = useState<Record<string, string>>({});
 
-  const handleQrUpload = async (methodId: string, event: ChangeEvent<HTMLInputElement>) => {
+  const [cropTarget, setCropTarget] = useState<{ methodId: string; imageSrc: string } | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUid(user.uid);
+        const settings = getSavedSettings(user.uid);
+        if (settings) {
+          setBank(settings.bank);
+          setAccountNumber(settings.accountNumber);
+          setAccountName(settings.accountName);
+          setEnabledMethods(settings.enabledMethods);
+          setQrCodes(settings.qrCodes);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleQrUpload = (methodId: string, event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
       alert('Ảnh QR cần nhỏ hơn 2MB.');
       return;
     }
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      setCropTarget({ methodId, imageSrc: reader.result as string });
+    });
+    reader.readAsDataURL(file);
+    // Reset file input value so selecting the same file again triggers onChange
+    event.target.value = '';
+  };
+
+  const uploadCroppedFile = async (croppedFile: File, methodId: string) => {
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', croppedFile);
       formData.append('upload_preset', 'datsanthethao');
       
       const res = await fetch('https://api.cloudinary.com/v1_1/vafqskfg/image/upload', {
@@ -64,6 +95,7 @@ export function OwnerPaymentSettings() {
       if (data.secure_url) {
         setQrCodes((current) => ({ ...current, [methodId]: data.secure_url }));
         setSaved(false);
+        setCropTarget(null);
       } else {
         throw new Error('Upload failed');
       }
@@ -74,8 +106,8 @@ export function OwnerPaymentSettings() {
   };
 
   const save = () => {
-    if (!bank || !accountNumber || !accountName) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ bank, accountNumber, accountName, enabledMethods, qrCodes }));
+    if (!bank || !accountNumber || !accountName || !uid) return;
+    localStorage.setItem(`${STORAGE_KEY}-${uid}`, JSON.stringify({ bank, accountNumber, accountName, enabledMethods, qrCodes }));
     setSaved(true);
   };
 
@@ -215,6 +247,14 @@ export function OwnerPaymentSettings() {
           Lưu cài đặt thanh toán
         </button>
       </div>
+
+      {cropTarget && (
+        <QRCropModal
+          imageSrc={cropTarget.imageSrc}
+          onClose={() => setCropTarget(null)}
+          onCropComplete={(file) => uploadCroppedFile(file, cropTarget.methodId)}
+        />
+      )}
     </div>
   );
 }
