@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 const PROVINCES = ['An Giang', 'Bà Rịa - Vũng Tàu', 'Bạc Liêu', 'Bắc Giang', 'Bắc Kạn', 'Bắc Ninh', 'Bến Tre', 'Bình Dương', 'Bình Định', 'Bình Phước', 'Bình Thuận', 'Cà Mau', 'Cao Bằng', 'Cần Thơ', 'Đà Nẵng', 'Đắk Lắk', 'Đắk Nông', 'Điện Biên', 'Đồng Nai', 'Đồng Tháp', 'Gia Lai', 'Hà Giang', 'Hà Nam', 'Hà Nội', 'Hà Tĩnh', 'Hải Dương', 'Hải Phòng', 'Hậu Giang', 'Hòa Bình', 'Hưng Yên', 'Khánh Hòa', 'Kiên Giang', 'Kon Tum', 'Lai Châu', 'Lạng Sơn', 'Lào Cai', 'Lâm Đồng', 'Long An', 'Nam Định', 'Nghệ An', 'Ninh Bình', 'Ninh Thuận', 'Phú Thọ', 'Phú Yên', 'Quảng Bình', 'Quảng Nam', 'Quảng Ngãi', 'Quảng Ninh', 'Quảng Trị', 'Sóc Trăng', 'Sơn La', 'Tây Ninh', 'Thái Bình', 'Thái Nguyên', 'Thanh Hóa', 'Thừa Thiên Huế', 'Tiền Giang', 'TP.HCM', 'Trà Vinh', 'Tuyên Quang', 'Vĩnh Long', 'Vĩnh Phúc', 'Yên Bái'];
 
 const SPORT_OPTIONS = ['Tất cả', 'Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball'];
+const AMENITY_OPTIONS = ['Bãi đỗ xe', 'Phòng thay đồ & tắm', 'Đèn chiếu sáng', 'Wi-Fi', 'Cho thuê dụng cụ', 'Căn tin', 'Camera an ninh', 'Trọng tài'];
 
 type SortKey = 'price-asc' | 'price-desc' | 'rating' | 'distance';
 
@@ -13,7 +14,7 @@ export function SearchPage() {
   const initialLocation = urlParams.get('location') || '';
   const initialSport = urlParams.get('sport') || '';
 
-  const [priceRange, setPriceRange] = useState(500000);
+  const [priceRange, setPriceRange] = useState(600000);
   const [selectedLocation, setSelectedLocation] = useState<string>(initialLocation);
   const [selectedSports, setSelectedSports] = useState<string[]>(initialSport && initialSport !== 'Tất cả' ? [initialSport] : []);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
@@ -45,8 +46,7 @@ export function SearchPage() {
 
   const toggleSport = (sport: string) => setSelectedSports(prev => prev.includes(sport) ? prev.filter(s => s !== sport) : [...prev, sport]);
   const toggleAmenity = (a: string) => setSelectedAmenities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
-  
-  const availableAmenities = Array.from(new Set(fields.flatMap(f => f.amenities || [])));
+  const availableAmenities = AMENITY_OPTIONS;
 
   const filtered = fields
     .filter(f => selectedLocation === '' || (f.location || '').includes(selectedLocation))
@@ -121,13 +121,13 @@ export function SearchPage() {
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3 block">Giá tối đa / giờ</label>
               <input
                 type="range"
-                min={100000} max={600000} step={50000}
+                min={0} max={600000} step={10000}
                 value={priceRange}
                 onChange={e => setPriceRange(Number(e.target.value))}
                 className="w-full accent-green-600"
               />
               <div className="flex justify-between mt-1">
-                <span className="text-xs text-gray-500">100,000đ</span>
+                <span className="text-xs text-gray-500">0đ</span>
                 <span className="text-xs font-semibold text-green-700">{priceRange.toLocaleString('vi-VN')}đ</span>
               </div>
             </div>
@@ -169,7 +169,7 @@ export function SearchPage() {
             </div>
 
             <button
-              onClick={() => { setSelectedSports([]); setSelectedAmenities([]); setPriceRange(500000); setSelectedLocation(''); }}
+              onClick={() => { setSelectedSports([]); setSelectedAmenities([]); setPriceRange(600000); setSelectedLocation(''); }}
               className="w-full py-2 rounded-lg text-sm text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-300 transition-colors"
             >
               Xóa bộ lọc
@@ -204,7 +204,7 @@ export function SearchPage() {
                         </div>
                         <div className="text-right">
                           <span className="text-green-600 font-bold text-xl">{field.price.toLocaleString('vi-VN')}đ</span>
-                          <div className="text-gray-400 text-xs">/giờ</div>
+                          <div className="text-gray-400 text-xs">/{field.schedule?.slotMinutes ?? 90} phút</div>
                         </div>
                       </div>
 
@@ -265,7 +265,7 @@ export function SearchPage() {
                         <svg className="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
                         <span className="text-sm font-medium">{field.rating}</span>
                       </div>
-                      <span className="text-green-600 font-bold">{(field.price || 0).toLocaleString('vi-VN')}đ/giờ</span>
+                      <span className="text-green-600 font-bold">{(field.price || 0).toLocaleString('vi-VN')}đ/{field.schedule?.slotMinutes ?? 90} phút</span>
                     </div>
                     <button className="mt-3 w-full py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors">
                       Đặt Ngay

@@ -212,7 +212,7 @@ export function Home() {
                   </div>
                   <div className="text-right">
                     <span className="text-green-600 font-bold text-base">{(field.price || 0).toLocaleString('vi-VN')}đ</span>
-                    <span className="text-gray-400 text-xs">/giờ</span>
+                    <span className="text-gray-400 text-xs">/{field.schedule?.slotMinutes ?? 90} phút</span>
                   </div>
                 </div>
                 <button

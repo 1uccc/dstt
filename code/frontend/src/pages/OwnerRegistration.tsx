@@ -9,7 +9,7 @@ const STEPS = [
   { number: 3, title: 'Cơ sở thể thao', detail: 'Thiết lập sân đầu tiên' },
 ];
 
-const AMENITIES = ['Bãi đỗ xe', 'Phòng thay đồ', 'Wifi miễn phí', 'Căn tin', 'Cho thuê dụng cụ', 'Đèn thi đấu'];
+const AMENITIES = ['Bãi đỗ xe', 'Phòng thay đồ & tắm', 'Đèn chiếu sáng', 'Wi-Fi', 'Cho thuê dụng cụ', 'Căn tin', 'Camera an ninh', 'Trọng tài'];
 
 type FormData = {
   fullName: string;
@@ -398,6 +398,7 @@ export function OwnerRegistration() {
                   <div>
                     <label htmlFor="slot-minutes" className="mb-1.5 block text-sm font-medium text-slate-700">Độ dài khung giờ</label>
                     <select id="slot-minutes" value={form.slotMinutes} onChange={(event) => update('slotMinutes', event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-green-500 focus:ring-4 focus:ring-green-500/10">
+                      <option value="30">30 phút</option>
                       <option value="60">60 phút</option>
                       <option value="90">90 phút</option>
                       <option value="120">120 phút</option>

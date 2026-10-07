@@ -544,10 +544,11 @@ export function FieldManagement() {
                 <div className="grid gap-3 sm:grid-cols-4">
                   <div>
                     <label htmlFor="field-slot-duration" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Độ dài khung giờ</label>
-                    <select id="field-slot-duration" value={activeSchedule.slotMinutes} onChange={(event) => setForm((current) => ({ ...current, schedule: { ...(current.schedule ?? createSchedule()), slotMinutes: Number(event.target.value) } }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-green-500">
-                      <option value={60}>60 phút</option>
-                      <option value={90}>90 phút</option>
-                      <option value={120}>120 phút</option>
+                    <select id="field-slot-duration" value={String(activeSchedule.slotMinutes)} onChange={(event) => setForm((current) => ({ ...current, schedule: { ...(current.schedule ?? createSchedule()), slotMinutes: Number(event.target.value) } }))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-green-500">
+                      <option value="30">30 phút</option>
+                      <option value="60">60 phút</option>
+                      <option value="90">90 phút</option>
+                      <option value="120">120 phút</option>
                     </select>
                   </div>
                   <div>

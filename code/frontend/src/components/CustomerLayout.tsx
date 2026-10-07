@@ -186,13 +186,6 @@ export function CustomerLayout() {
           </div>
           <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-xs">© 2026 SportBook.</p>
-            <div className="flex items-center gap-3">
-              {['Facebook', 'Instagram', 'YouTube', 'TikTok'].map(s => (
-                <button key={s} className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-green-600 flex items-center justify-center transition-colors">
-                  <span className="text-xs font-bold">{s[0]}</span>
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       </footer>

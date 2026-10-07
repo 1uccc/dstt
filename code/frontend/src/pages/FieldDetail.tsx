@@ -91,7 +91,7 @@ export function FieldDetail() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
-  
+
   const today = new Date();
   const [calMonth, setCalMonth] = useState(today.getMonth());
   const [calYear, setCalYear] = useState(today.getFullYear());
@@ -126,7 +126,7 @@ export function FieldDetail() {
         console.error(err);
       }
     };
-    
+
     const fetchBookings = async () => {
       try {
         const res = await fetch(`http://localhost:5000/api/fields/${id}/bookings`);
@@ -135,7 +135,7 @@ export function FieldDetail() {
         console.error(err);
       }
     };
-    
+
     const fetchReviews = async () => {
       try {
         const res = await fetch(`http://localhost:5000/api/fields/${id}/reviews`);
@@ -179,7 +179,7 @@ export function FieldDetail() {
 
   const daysInMonth = getDaysInMonth(calYear, calMonth);
   const firstDay = new Date(calYear, calMonth, 1).getDay();
-  const monthNames = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+  const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
 
   const toggleSlot = (slot: string) => {
     setSelectedSlots(prev => prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot]);
@@ -192,35 +192,35 @@ export function FieldDetail() {
     ? ownerSchedule?.days[new Date(calYear, calMonth, selectedDate).getDay()]
     : null;
   const selectedDateBlocked = Boolean(selectedDateValue && ownerSchedule?.blockedDates?.includes(selectedDateValue));
-  
+
   const isSelectedDateToday = selectedDateValue === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const currentMinutes = today.getHours() * 60 + today.getMinutes();
 
   const displayedSlots = ownerSchedule && selectedDaySchedule?.enabled && !selectedDateBlocked
     ? Array.from(
-        { length: Math.max(0, Math.floor((timeToMinutes(selectedDaySchedule.close) - timeToMinutes(selectedDaySchedule.open)) / ownerSchedule.slotMinutes)) },
-        (_, index) => {
-          const start = timeToMinutes(selectedDaySchedule.open) + index * ownerSchedule.slotMinutes;
-          const timeStr = `${minutesToTime(start)} - ${minutesToTime(start + ownerSchedule.slotMinutes)}`;
-          let status = 'available';
-          const isBooked = fieldBookings.some(b => b.date === selectedDateValue && b.time.includes(timeStr));
-          if (isBooked || (isSelectedDateToday && start <= currentMinutes)) status = 'booked';
-          return { time: timeStr, status };
-        },
-      )
+      { length: Math.max(0, Math.floor((timeToMinutes(selectedDaySchedule.close) - timeToMinutes(selectedDaySchedule.open)) / ownerSchedule.slotMinutes)) },
+      (_, index) => {
+        const start = timeToMinutes(selectedDaySchedule.open) + index * ownerSchedule.slotMinutes;
+        const timeStr = `${minutesToTime(start)} - ${minutesToTime(start + ownerSchedule.slotMinutes)}`;
+        let status = 'available';
+        const isBooked = fieldBookings.some(b => b.date === selectedDateValue && b.time.includes(timeStr));
+        if (isBooked || (isSelectedDateToday && start <= currentMinutes)) status = 'booked';
+        return { time: timeStr, status };
+      },
+    )
     : ownerSchedule && selectedDate
       ? []
       : TIME_SLOTS.map(slot => {
-          let status = slot.status;
-          const startMinutes = timeToMinutes(slot.time.split(' - ')[0]);
-          const isBooked = fieldBookings.some(b => b.date === selectedDateValue && b.time.includes(slot.time));
-          if (isBooked || (isSelectedDateToday && startMinutes <= currentMinutes)) status = 'booked';
-          return { ...slot, status };
+        let status = slot.status;
+        const startMinutes = timeToMinutes(slot.time.split(' - ')[0]);
+        const isBooked = fieldBookings.some(b => b.date === selectedDateValue && b.time.includes(slot.time));
+        if (isBooked || (isSelectedDateToday && startMinutes <= currentMinutes)) status = 'booked';
+        return { ...slot, status };
       });
   const priceForSlot = (slot: string) =>
     ownerSchedule && slot.slice(0, 5) >= ownerSchedule.peakStart ? ownerSchedule.peakPrice : ownerSchedule?.regularPrice ?? PRICE_PER_SLOT;
   const total = selectedSlots.reduce((sum, slot) => sum + priceForSlot(slot), 0);
-  
+
   let isCustomer = false;
   let customerName = 'Khách hàng';
   try {
@@ -230,7 +230,7 @@ export function FieldDetail() {
       isCustomer = sessionObj.role === 'customer';
       customerName = sessionObj.name || 'Khách hàng';
     }
-  } catch {}
+  } catch { }
 
   const handleCheckout = () => {
     const checkoutState = { slots: selectedSlots, date: selectedDateValue, total, field: field?.name || 'Sân bóng', fieldId: field?.id };
@@ -241,7 +241,7 @@ export function FieldDetail() {
     }
     navigate('/checkout', { state: checkoutState });
   };
-  
+
   const submitReview = async () => {
     if (!reviewComment.trim()) return;
     setSubmittingReview(true);
@@ -338,7 +338,7 @@ export function FieldDetail() {
                 <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-center">
                   <div className="text-2xl font-bold text-amber-600">{Number(field.rating || 0).toFixed(1)}</div>
                   <div className="flex items-center gap-0.5 justify-center">
-                    {[1,2,3,4,5].map(i => <svg key={i} className={`w-3 h-3 ${i <= Math.floor(field.rating || 0) ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
+                    {[1, 2, 3, 4, 5].map(i => <svg key={i} className={`w-3 h-3 ${i <= Math.floor(field.rating || 0) ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">{field.reviews || 0} đánh giá</div>
                 </div>
@@ -382,8 +382,17 @@ export function FieldDetail() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {(field.amenities || []).length > 0 ? (
                 field.amenities.map((a: string) => {
-                  const label = { parking: 'Bãi đỗ xe', wifi: 'Wi-Fi', referee: 'Trọng tài', lights: 'Đèn chiếu sáng', showers: 'Phòng thay đồ' }[a] || a;
-                  const icon = { parking: '🅿️', wifi: '📶', referee: '🧑‍⚖️', lights: '💡', showers: '🚿' }[a] || '✅';
+                  const label = a;
+                  const icon = {
+                    'Bãi đỗ xe': '🅿️',
+                    'Wi-Fi': '📶',
+                    'Trọng tài': '🧑‍⚖️',
+                    'Đèn chiếu sáng': '💡',
+                    'Phòng thay đồ & tắm': '🚿',
+                    'Căn tin': '🥤',
+                    'Cho thuê dụng cụ': '⚽',
+                    'Camera an ninh': '📸',
+                  }[a] || '✅';
                   return (
                     <div key={a} className="bg-green-50 border border-green-100 rounded-xl p-3 text-center">
                       <div className="text-xl mb-1">{icon}</div>
@@ -407,7 +416,7 @@ export function FieldDetail() {
                 </button>
               )}
             </div>
-            
+
             {showReviewForm && (
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm mb-6">
                 <div className="flex items-center justify-between mb-3">
@@ -436,7 +445,7 @@ export function FieldDetail() {
                   <button onClick={() => setShowReviewForm(false)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                     Hủy
                   </button>
-                  <button 
+                  <button
                     onClick={submitReview}
                     disabled={submittingReview || !reviewComment.trim()}
                     className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg transition-colors shadow-sm"
@@ -446,7 +455,7 @@ export function FieldDetail() {
                 </div>
               </div>
             )}
-            
+
             <div className="space-y-4">
               {reviews.map((r, i) => (
                 <div key={r.id || i} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
@@ -462,14 +471,14 @@ export function FieldDetail() {
                         </span>
                       </div>
                       <div className="flex items-center gap-0.5 mt-0.5 mb-2">
-                        {[1,2,3,4,5].map(i => <svg key={i} className={`w-3 h-3 ${i <= r.rating ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
+                        {[1, 2, 3, 4, 5].map(i => <svg key={i} className={`w-3 h-3 ${i <= r.rating ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
                       </div>
                       <p className="text-sm text-gray-600 leading-relaxed">{r.comment}</p>
                     </div>
                   </div>
                 </div>
               ))}
-              
+
               {reviews.length === 0 && (
                 <div className="text-center py-6 text-gray-500 text-sm bg-gray-50 rounded-xl">
                   Chưa có đánh giá nào cho sân này.
@@ -486,7 +495,7 @@ export function FieldDetail() {
               <div className="bg-green-600 px-5 py-4">
                 <div className="flex items-baseline gap-1">
                   <span className="text-white text-2xl font-bold">{(ownerSchedule?.regularPrice ?? PRICE_PER_SLOT).toLocaleString('vi-VN')}đ</span>
-                  <span className="text-green-200 text-sm">/1.5 giờ</span>
+                  <span className="text-green-200 text-sm">/{ownerSchedule?.slotMinutes ?? 90} phút</span>
                 </div>
               </div>
 
@@ -502,7 +511,7 @@ export function FieldDetail() {
                     </div>
                   </div>
                   <div className="grid grid-cols-7 gap-0.5">
-                    {['CN','T2','T3','T4','T5','T6','T7'].map(d => (
+                    {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map(d => (
                       <div key={d} className="text-center text-xs text-gray-400 font-medium py-1">{d}</div>
                     ))}
                     {Array(firstDay).fill(null).map((_, i) => <div key={`empty-${i}`} />)}
@@ -521,12 +530,11 @@ export function FieldDetail() {
                           key={day}
                           disabled={isPast || dayClosed}
                           onClick={() => { setSelectedDate(day); setSelectedSlots([]); }}
-                          className={`text-center text-xs py-1.5 rounded-lg transition-colors font-medium ${
-                            isSelected ? 'bg-green-600 text-white' :
+                          className={`text-center text-xs py-1.5 rounded-lg transition-colors font-medium ${isSelected ? 'bg-green-600 text-white' :
                             isToday ? 'bg-green-50 text-green-700 border border-green-200' :
-                            isPast || dayClosed ? 'text-gray-300 cursor-not-allowed line-through' :
-                            'text-gray-700 hover:bg-green-50 hover:text-green-700'
-                          }`}
+                              isPast || dayClosed ? 'text-gray-300 cursor-not-allowed line-through' :
+                                'text-gray-700 hover:bg-green-50 hover:text-green-700'
+                            }`}
                         >
                           {day}
                         </button>
@@ -543,13 +551,12 @@ export function FieldDetail() {
                       key={slot.time}
                       disabled={slot.status === 'booked'}
                       onClick={() => slot.status === 'available' && toggleSlot(slot.time)}
-                      className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                        slot.status === 'booked'
-                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed line-through'
-                          : selectedSlots.includes(slot.time)
-                            ? 'bg-green-600 text-white border-green-600 shadow-sm'
-                            : 'bg-white text-gray-700 border-gray-200 hover:border-green-400 hover:text-green-700'
-                      }`}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${slot.status === 'booked'
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed line-through'
+                        : selectedSlots.includes(slot.time)
+                          ? 'bg-green-600 text-white border-green-600 shadow-sm'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-green-400 hover:text-green-700'
+                        }`}
                     >
                       {slot.time}
                     </button>
