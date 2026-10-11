@@ -32,7 +32,6 @@ interface FieldSchedule {
 }
 
 const DAY_NAMES = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
-const AMENITY_OPTIONS = ['Bãi đỗ xe', 'Phòng thay đồ & tắm', 'Đèn chiếu sáng', 'Wi-Fi', 'Cho thuê dụng cụ', 'Căn tin', 'Camera an ninh', 'Trọng tài'];
 
 const createSchedule = (): FieldSchedule => ({
   slotMinutes: 90,
@@ -43,8 +42,6 @@ const createSchedule = (): FieldSchedule => ({
   blockedDates: [],
 });
 
-const SPORT_OPTIONS = ['Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball'];
-
 export function FieldManagement() {
   const location = useLocation();
   const isOwnerPortal = location.pathname.startsWith('/owner');
@@ -54,6 +51,7 @@ export function FieldManagement() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [editField, setEditField] = useState<Field | null>(null);
   const [currentUid, setCurrentUid] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(user => {
@@ -64,7 +62,7 @@ export function FieldManagement() {
 
   const fetchFields = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/fields');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields`);
       if (res.ok) {
         const data = await res.json();
         setFields(data);
@@ -74,15 +72,32 @@ export function FieldManagement() {
     }
   };
 
+  const [sportsList, setSportsList] = useState<string[]>(['Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball']);
+  const [amenitiesList, setAmenitiesList] = useState<string[]>(['Bãi đỗ xe', 'Phòng thay đồ & tắm', 'Đèn chiếu sáng', 'Wi-Fi', 'Cho thuê dụng cụ', 'Căn tin', 'Camera an ninh', 'Trọng tài']);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.sports?.length) setSportsList(data.sports);
+        if (data.amenities?.length) setAmenitiesList(data.amenities);
+      }
+    } catch (err) {
+      console.error('Lỗi lấy cấu hình:', err);
+    }
+  };
+
   useEffect(() => {
     fetchFields();
+    fetchSettings();
   }, []);
 
   // New field form state
   const emptyForm = () => ({
     name: '',
     location: '',
-    sport: 'Bóng đá',
+    sport: sportsList.length > 0 ? sportsList[0] : 'Bóng đá',
     price: '',
     description: '',
     image: '',
@@ -152,7 +167,7 @@ export function FieldManagement() {
     if (!field) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/fields/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ active: !field.active })
@@ -166,7 +181,7 @@ export function FieldManagement() {
   const deleteField = async (id: string) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/fields/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -181,6 +196,8 @@ export function FieldManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const token = localStorage.getItem('token');
       const payload = {
@@ -199,7 +216,7 @@ export function FieldManagement() {
       };
 
       if (editField) {
-        const res = await fetch(`http://localhost:5000/api/fields/${editField.id}`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields/${editField.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify(payload)
@@ -208,7 +225,7 @@ export function FieldManagement() {
           fetchFields();
         }
       } else {
-        const res = await fetch(`http://localhost:5000/api/fields`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify(payload)
@@ -222,6 +239,8 @@ export function FieldManagement() {
       setForm(emptyForm());
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -310,7 +329,7 @@ export function FieldManagement() {
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-3">
                       <img src={field.image} alt={field.name} className="w-12 h-9 rounded-lg object-cover bg-gray-100 shrink-0" />
-                      <span className="font-medium text-gray-900 whitespace-nowrap">{field.name}</span>
+                      <span className="font-medium text-gray-900 min-w-[150px] block">{field.name}</span>
                     </div>
                   </td>
                   {!isOwnerPortal && (
@@ -319,7 +338,7 @@ export function FieldManagement() {
                       <p className="text-xs text-gray-400">Đối tác chủ sân</p>
                     </td>
                   )}
-                  <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{field.location || field.address}</td>
+                  <td className="px-4 py-3.5 text-gray-600 min-w-[200px] max-w-[300px] truncate" title={field.location || field.address}>{field.location || field.address}</td>
                   <td className="px-4 py-3.5">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap">
                       {field.sport}
@@ -407,7 +426,7 @@ export function FieldManagement() {
                     onChange={e => setForm(f => ({ ...f, sport: e.target.value }))}
                     className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
                   >
-                    {SPORT_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                    {sportsList.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
                 <div>
@@ -513,7 +532,7 @@ export function FieldManagement() {
                   <p className="text-xs text-gray-500">Chọn các tiện ích sẽ hiển thị trên trang thông tin sân.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {AMENITY_OPTIONS.map((amenity) => {
+                  {amenitiesList.map((amenity) => {
                     const selected = selectedAmenities.includes(amenity);
                     return (
                       <label key={amenity} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition ${selected ? 'border-green-300 bg-green-50 text-green-800' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
@@ -566,19 +585,24 @@ export function FieldManagement() {
                 </div>
 
                 <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
-                  <div className="grid grid-cols-[7rem_1fr_auto] bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <div className="hidden sm:grid sm:grid-cols-[7rem_1fr_auto] bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
                     <span>Ngày</span><span>Giờ hoạt động</span><span>Nhận lịch</span>
                   </div>
                   <div className="divide-y divide-gray-100">
                     {activeSchedule.days.map((day, index) => (
-                      <div key={DAY_NAMES[index]} className="grid grid-cols-[7rem_1fr_auto] items-center gap-3 px-4 py-2.5">
-                        <span className="text-sm font-medium text-gray-700">{DAY_NAMES[index]}</span>
-                        <div className={`flex items-center gap-2 ${day.enabled ? '' : 'pointer-events-none opacity-40'}`}>
-                          <input aria-label={`Giờ mở cửa ${DAY_NAMES[index]}`} type="time" value={day.open} onChange={(event) => updateScheduleDay(index, { open: event.target.value })} className="min-w-0 rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-green-500" />
-                          <span className="text-xs text-gray-400">đến</span>
-                          <input aria-label={`Giờ đóng cửa ${DAY_NAMES[index]}`} type="time" value={day.close} onChange={(event) => updateScheduleDay(index, { close: event.target.value })} className="min-w-0 rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-green-500" />
+                      <div key={DAY_NAMES[index]} className="flex flex-col gap-2 px-4 py-3 sm:grid sm:grid-cols-[7rem_1fr_auto] sm:items-center sm:gap-3 sm:py-2.5">
+                        <div className="flex items-center justify-between sm:block">
+                          <span className="text-sm font-medium text-gray-700">{DAY_NAMES[index]}</span>
+                          <button type="button" role="switch" aria-checked={day.enabled} onClick={() => updateScheduleDay(index, { enabled: !day.enabled })} className={`relative h-5 w-9 shrink-0 rounded-full transition sm:hidden ${day.enabled ? 'bg-green-600' : 'bg-gray-300'}`}>
+                            <span className={`absolute top-1 h-3 w-3 rounded-full bg-white shadow-sm transition-all ${day.enabled ? 'left-5' : 'left-1'}`} />
+                          </button>
                         </div>
-                        <button type="button" role="switch" aria-checked={day.enabled} onClick={() => updateScheduleDay(index, { enabled: !day.enabled })} className={`relative h-5 w-9 rounded-full transition ${day.enabled ? 'bg-green-600' : 'bg-gray-300'}`}>
+                        <div className={`flex items-center gap-2 ${day.enabled ? '' : 'pointer-events-none opacity-40'}`}>
+                          <input aria-label={`Giờ mở cửa ${DAY_NAMES[index]}`} type="time" value={day.open} onChange={(event) => updateScheduleDay(index, { open: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-green-500" />
+                          <span className="text-xs text-gray-400 shrink-0">đến</span>
+                          <input aria-label={`Giờ đóng cửa ${DAY_NAMES[index]}`} type="time" value={day.close} onChange={(event) => updateScheduleDay(index, { close: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs outline-none focus:border-green-500" />
+                        </div>
+                        <button type="button" role="switch" aria-checked={day.enabled} onClick={() => updateScheduleDay(index, { enabled: !day.enabled })} className={`relative h-5 w-9 shrink-0 rounded-full transition hidden sm:block ${day.enabled ? 'bg-green-600' : 'bg-gray-300'}`}>
                           <span className={`absolute top-1 h-3 w-3 rounded-full bg-white shadow-sm transition-all ${day.enabled ? 'left-5' : 'left-1'}`} />
                         </button>
                       </div>
@@ -631,9 +655,10 @@ export function FieldManagement() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold transition-colors shadow-md shadow-green-600/25"
+                  disabled={isSubmitting}
+                  className={`flex-1 py-3 rounded-xl text-white text-sm font-bold transition-colors shadow-md ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-green-600/25'}`}
                 >
-                  {editField ? 'Lưu Thay Đổi' : 'Thêm Sân'}
+                  {isSubmitting ? 'Đang xử lý...' : (editField ? 'Lưu Thay Đổi' : 'Thêm Sân')}
                 </button>
               </div>
             </form>
@@ -662,6 +687,8 @@ export function FieldManagement() {
         <QRCropModal
           imageSrc={cropTarget}
           aspectRatio={21/9}
+          title="Cắt ảnh sân"
+          description="Kéo và thu phóng để căn chỉnh ảnh sân vào giữa khung"
           onClose={() => setCropTarget(null)}
           onCropComplete={(file) => uploadCroppedFile(file)}
         />

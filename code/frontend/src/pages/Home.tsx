@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 
-
-const SPORT_TYPES = ['Tất cả', 'Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball'];
-
 const PROVINCES = ['An Giang', 'Bà Rịa - Vũng Tàu', 'Bạc Liêu', 'Bắc Giang', 'Bắc Kạn', 'Bắc Ninh', 'Bến Tre', 'Bình Dương', 'Bình Định', 'Bình Phước', 'Bình Thuận', 'Cà Mau', 'Cao Bằng', 'Cần Thơ', 'Đà Nẵng', 'Đắk Lắk', 'Đắk Nông', 'Điện Biên', 'Đồng Nai', 'Đồng Tháp', 'Gia Lai', 'Hà Giang', 'Hà Nam', 'Hà Nội', 'Hà Tĩnh', 'Hải Dương', 'Hải Phòng', 'Hậu Giang', 'Hòa Bình', 'Hưng Yên', 'Khánh Hòa', 'Kiên Giang', 'Kon Tum', 'Lai Châu', 'Lạng Sơn', 'Lào Cai', 'Lâm Đồng', 'Long An', 'Nam Định', 'Nghệ An', 'Ninh Bình', 'Ninh Thuận', 'Phú Thọ', 'Phú Yên', 'Quảng Bình', 'Quảng Nam', 'Quảng Ngãi', 'Quảng Ninh', 'Quảng Trị', 'Sóc Trăng', 'Sơn La', 'Tây Ninh', 'Thái Bình', 'Thái Nguyên', 'Thanh Hóa', 'Thừa Thiên Huế', 'Tiền Giang', 'TP.HCM', 'Trà Vinh', 'Tuyên Quang', 'Vĩnh Long', 'Vĩnh Phúc', 'Yên Bái'];
 
 const STATS = [
@@ -19,12 +16,13 @@ export function Home() {
   const [sport, setSport] = useState('Bóng đá');
   const [date, setDate] = useState('');
   const [activeSport, setActiveSport] = useState('Tất cả');
+  const [sportsList, setSportsList] = useState<string[]>(['Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball']);
   const [fields, setFields] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchFields = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/fields');
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields`);
         if (res.ok) {
           const data = await res.json();
           setFields(data.filter((f: any) => f.active));
@@ -33,7 +31,19 @@ export function Home() {
         console.error('Lỗi lấy danh sách sân:', err);
       }
     };
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.sports?.length) setSportsList(data.sports);
+        }
+      } catch (err) {
+        console.error('Lỗi lấy cấu hình:', err);
+      }
+    };
     fetchFields();
+    fetchSettings();
   }, []);
 
   const filteredFields = activeSport === 'Tất cả'
@@ -98,7 +108,7 @@ export function Home() {
                   onChange={e => setSport(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
                 >
-                  {['Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball'].map(s => (
+                  {sportsList.map(s => (
                     <option key={s}>{s}</option>
                   ))}
                 </select>
@@ -155,7 +165,7 @@ export function Home() {
 
         {/* Sport Filter Pills */}
         <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-1">
-          {SPORT_TYPES.map(s => (
+          {['Tất cả', ...sportsList].map(s => (
             <button
               key={s}
               onClick={() => setActiveSport(s)}

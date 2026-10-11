@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { auth } from '../config/firebase';
 
 type OwnerScheduleSettings = {
   field: string;
@@ -91,6 +92,9 @@ export function FieldDetail() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+  
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyComment, setReplyComment] = useState('');
 
   const today = new Date();
   const [calMonth, setCalMonth] = useState(today.getMonth());
@@ -117,7 +121,7 @@ export function FieldDetail() {
   useEffect(() => {
     const fetchField = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/fields/${id}`);
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields/${id}`);
         if (res.ok) {
           const data = await res.json();
           setField(data);
@@ -129,7 +133,7 @@ export function FieldDetail() {
 
     const fetchBookings = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/fields/${id}/bookings`);
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields/${id}/bookings`);
         if (res.ok) setFieldBookings(await res.json());
       } catch (err) {
         console.error(err);
@@ -138,7 +142,7 @@ export function FieldDetail() {
 
     const fetchReviews = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/fields/${id}/reviews`);
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields/${id}/reviews`);
         if (res.ok) {
           const data = await res.json();
           setReviews(data);
@@ -152,7 +156,7 @@ export function FieldDetail() {
       const token = localStorage.getItem('token');
       if (!token) return;
       try {
-        const res = await fetch(`http://localhost:5000/api/fields/${id}/can-review`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields/${id}/can-review`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -247,7 +251,7 @@ export function FieldDetail() {
     setSubmittingReview(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/fields/${id}/reviews`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields/${id}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ rating: reviewRating, comment: reviewComment, customerName })
@@ -268,7 +272,30 @@ export function FieldDetail() {
     }
   };
 
+  const submitReply = async (reviewId: string) => {
+    if (!replyComment.trim()) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields/${id}/reviews/${reviewId}/reply`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ reply: replyComment })
+      });
+      if (res.ok) {
+        setReviews(reviews.map(r => r.id === reviewId ? { ...r, ownerReply: replyComment } : r));
+        setReplyingTo(null);
+        setReplyComment('');
+      } else {
+        alert('Có lỗi xảy ra khi phản hồi.');
+      }
+    } catch {
+      alert('Lỗi kết nối');
+    }
+  };
+
   if (!field) return <div className="p-8 text-center text-gray-500">Đang tải thông tin sân...</div>;
+
+  const isFieldOwner = auth.currentUser?.uid === field.owner;
 
   const displayImages = field.images && field.images.length > 0 ? field.images : (field.image ? [field.image] : IMAGES);
 
@@ -474,6 +501,28 @@ export function FieldDetail() {
                         {[1, 2, 3, 4, 5].map(i => <svg key={i} className={`w-3 h-3 ${i <= r.rating ? 'text-amber-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
                       </div>
                       <p className="text-sm text-gray-600 leading-relaxed">{r.comment}</p>
+                      
+                      {r.ownerReply && (
+                        <div className="mt-3 bg-gray-50 rounded-lg p-3 border-l-2 border-green-500">
+                          <div className="text-xs font-semibold text-gray-700 mb-1">Phản hồi từ Chủ sân:</div>
+                          <div className="text-sm text-gray-600">{r.ownerReply}</div>
+                        </div>
+                      )}
+                      {!r.ownerReply && isFieldOwner && (
+                        <div className="mt-2">
+                          {replyingTo === r.id ? (
+                            <div className="mt-2">
+                              <textarea className="w-full text-sm border border-gray-200 rounded p-2 focus:outline-none focus:border-green-500 resize-none" rows={2} value={replyComment} onChange={e => setReplyComment(e.target.value)} placeholder="Nhập phản hồi..." />
+                              <div className="flex gap-2 mt-2">
+                                 <button onClick={() => submitReply(r.id)} className="text-xs font-bold bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700">Gửi phản hồi</button>
+                                 <button onClick={() => setReplyingTo(null)} className="text-xs font-medium text-gray-500 px-3 py-1.5 hover:bg-gray-100 rounded">Hủy</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button onClick={() => { setReplyingTo(r.id); setReplyComment(''); }} className="text-xs font-medium text-green-700 hover:text-green-800">Phản hồi</button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

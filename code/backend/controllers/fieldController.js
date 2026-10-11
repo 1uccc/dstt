@@ -3,7 +3,20 @@ const { db } = require('../config/firebase');
 // [Lấy danh sách sân]
 exports.getAllFields = async (req, res) => {
   try {
-    const snapshot = await db.collection('fields').get();
+    let query = db.collection('fields');
+    
+    if (req.query.sport) {
+      query = query.where('sport', '==', req.query.sport);
+    }
+    if (req.query.active) {
+      query = query.where('active', '==', req.query.active === 'true');
+    }
+    
+    // Limit to 100 by default to prevent large payload
+    const limit = parseInt(req.query.limit) || 100;
+    query = query.limit(limit);
+    
+    const snapshot = await query.get();
     const fields = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(fields);
   } catch (error) {
@@ -55,8 +68,32 @@ exports.createField = async (req, res) => {
 exports.updateField = async (req, res) => {
   try {
     const fieldId = req.params.id;
-    await db.collection('fields').doc(fieldId).update(req.body);
-    res.json({ message: 'Cập nhật thành công', field: { id: fieldId, ...req.body } });
+    const fieldRef = db.collection('fields').doc(fieldId);
+    const fieldDoc = await fieldRef.get();
+
+    if (!fieldDoc.exists) {
+      return res.status(404).json({ message: 'Không tìm thấy sân' });
+    }
+
+    if (req.user.role !== 'admin' && fieldDoc.data().owner !== req.user.uid) {
+      return res.status(403).json({ message: 'Bạn không có quyền sửa sân này' });
+    }
+
+    const allowedFields = [
+      'name', 'location', 'address', 'sport', 'price', 
+      'image', 'images', 'mapUrl', 'ownerName', 'amenities', 
+      'schedule', 'active', 'description'
+    ];
+
+    const updates = {};
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) {
+        updates[key] = req.body[key];
+      }
+    }
+
+    await fieldRef.update(updates);
+    res.json({ message: 'Cập nhật thành công', field: { id: fieldId, ...updates } });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi khi cập nhật', error: error.message });
   }
@@ -192,9 +229,67 @@ exports.canReview = async (req, res) => {
 // [Xóa sân]
 exports.deleteField = async (req, res) => {
   try {
-    await db.collection('fields').doc(req.params.id).delete();
-    res.json({ message: 'Đã xóa sân' });
+    const fieldId = req.params.id;
+    const fieldRef = db.collection('fields').doc(fieldId);
+    const fieldDoc = await fieldRef.get();
+
+    if (!fieldDoc.exists) {
+      return res.status(404).json({ message: 'Không tìm thấy sân' });
+    }
+
+    if (req.user.role !== 'admin' && fieldDoc.data().owner !== req.user.uid) {
+      return res.status(403).json({ message: 'Bạn không có quyền xóa sân này' });
+    }
+
+    // Xóa sân
+    await fieldRef.delete();
+
+    // Xóa bookings liên quan
+    const bookingsSnapshot = await db.collection('bookings').where('fieldId', '==', fieldId).get();
+    const batch = db.batch();
+    bookingsSnapshot.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+
+    // Xóa reviews liên quan
+    const reviewsSnapshot = await db.collection('reviews').where('fieldId', '==', fieldId).get();
+    reviewsSnapshot.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+
+    await batch.commit();
+
+    res.json({ message: 'Đã xóa sân và các dữ liệu liên quan' });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi khi xóa', error: error.message });
+  }
+};
+
+// [Phản hồi đánh giá]
+exports.replyReview = async (req, res) => {
+  try {
+    const { id, reviewId } = req.params;
+    const { reply } = req.body;
+    
+    const fieldRef = db.collection('fields').doc(id);
+    const fieldDoc = await fieldRef.get();
+    
+    if (!fieldDoc.exists) {
+      return res.status(404).json({ message: 'Không tìm thấy sân' });
+    }
+
+    if (req.user.role !== 'admin' && fieldDoc.data().owner !== req.user.uid) {
+      return res.status(403).json({ message: 'Bạn không có quyền phản hồi đánh giá của sân này' });
+    }
+
+    const reviewRef = db.collection('reviews').doc(reviewId);
+    await reviewRef.update({
+      ownerReply: reply,
+      repliedAt: new Date().toISOString()
+    });
+
+    res.json({ message: 'Đã phản hồi đánh giá', reply });
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
 };

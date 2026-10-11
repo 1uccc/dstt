@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { useState } from 'react';
+import { auth } from '../config/firebase';
 
 export function CustomerLayout() {
   const location = useLocation();
@@ -28,8 +29,14 @@ export function CustomerLayout() {
     .join('')
     .toUpperCase() || 'KH';
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await auth.signOut();
+    } catch (error) {
+      console.error('Logout error', error);
+    }
     localStorage.removeItem('sportbook-session');
+    localStorage.removeItem('token');
     sessionStorage.removeItem('sportbook-pending-checkout');
     setSession(null);
     setProfileOpen(false);
@@ -118,10 +125,10 @@ export function CustomerLayout() {
                 </div>
               ) : (
                 <>
-                  <button onClick={() => navigate('/auth')} className="hidden sm:block px-4 py-2 rounded-lg text-sm font-medium text-gray-700 border border-gray-200 hover:border-gray-300 transition-colors">
+                  <button onClick={() => navigate('/auth')} className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium text-gray-700 border border-gray-200 hover:border-gray-300 transition-colors whitespace-nowrap">
                     Đăng nhập
                   </button>
-                  <button onClick={() => navigate('/auth?mode=register')} className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors shadow-sm">
+                  <button onClick={() => navigate('/auth?mode=register')} className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors shadow-sm whitespace-nowrap">
                     Đăng ký
                   </button>
                 </>

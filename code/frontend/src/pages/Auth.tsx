@@ -71,7 +71,7 @@ export function Auth() {
 
   const syncUserToBackend = async (token: string, userData: any) => {
     try {
-      await fetch('http://localhost:5000/api/auth/sync', {
+      await fetch(`${import.meta.env.VITE_API_URL}/api/auth/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -117,7 +117,7 @@ export function Auth() {
         let name = user.email;
         let status = 'active';
         try {
-          const profileRes = await fetch('http://localhost:5000/api/users/profile', {
+          const profileRes = await fetch(`${import.meta.env.VITE_API_URL}/api/users/profile`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (profileRes.ok) {
@@ -169,7 +169,7 @@ export function Auth() {
       let role = 'customer';
       let status = 'active';
       try {
-        const profileRes = await fetch('http://localhost:5000/api/users/profile', {
+        const profileRes = await fetch(`${import.meta.env.VITE_API_URL}/api/users/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (profileRes.ok) {

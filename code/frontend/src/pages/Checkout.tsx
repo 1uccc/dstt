@@ -16,30 +16,56 @@ type OwnerPaymentSettings = {
   qrCodes: Record<string, string>;
 };
 
-function getOwnerPaymentSettings(uid?: string): OwnerPaymentSettings {
+interface FieldData {
+  id?: string;
+  name?: string;
+  location?: string;
+  address?: string;
+  sport?: string;
+  price?: number;
+  image?: string;
+  images?: string[];
+  owner?: string;
+  [key: string]: any;
+}
+
+interface SessionData {
+  role?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+  [key: string]: any;
+}
+
+interface BookingResult {
+  bookingCode?: string;
+  id?: string;
+  [key: string]: any;
+}
+
+const DEFAULT_PAYMENT: OwnerPaymentSettings = {
+  bank: 'Vietcombank',
+  accountNumber: '0123456789',
+  accountName: 'NGUYEN MINH HOANG',
+  enabledMethods: PAYMENT_METHODS.map((method) => method.id),
+  qrCodes: {},
+};
+
+async function fetchOwnerPaymentSettings(uid: string): Promise<OwnerPaymentSettings> {
   try {
-    const key = uid ? `sportbook-owner-payment-${uid}` : 'sportbook-owner-payment';
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      const parsed = JSON.parse(saved);
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/payment/${uid}`);
+    if (res.ok) {
+      const parsed = await res.json();
       return {
-        bank: parsed.bank ?? 'Vietcombank',
-        accountNumber: parsed.accountNumber ?? '',
-        accountName: parsed.accountName ?? '',
-        enabledMethods: Array.isArray(parsed.enabledMethods) ? parsed.enabledMethods : PAYMENT_METHODS.map((method) => method.id),
-        qrCodes: parsed.qrCodes ?? {},
+        bank: parsed.bank || 'Vietcombank',
+        accountNumber: parsed.accountNumber || '',
+        accountName: parsed.accountName || '',
+        enabledMethods: Array.isArray(parsed.enabledMethods) && parsed.enabledMethods.length > 0 ? parsed.enabledMethods : DEFAULT_PAYMENT.enabledMethods,
+        qrCodes: parsed.qrCodes || {},
       };
     }
-  } catch {
-    // Fall back to the prototype account below.
-  }
-  return {
-    bank: 'Vietcombank',
-    accountNumber: '0123456789',
-    accountName: 'NGUYEN MINH HOANG',
-    enabledMethods: PAYMENT_METHODS.map((method) => method.id),
-    qrCodes: {},
-  };
+  } catch {}
+  return DEFAULT_PAYMENT;
 }
 
 export function Checkout() {
@@ -67,19 +93,20 @@ export function Checkout() {
   const subtotal = state.total || 700000;
   const total = subtotal;
 
-  const [ownerPayment, setOwnerPayment] = useState(getOwnerPaymentSettings());
-  const [fieldData, setFieldData] = useState<any>(null);
+  const [ownerPayment, setOwnerPayment] = useState<OwnerPaymentSettings>(DEFAULT_PAYMENT);
+  const [fieldData, setFieldData] = useState<FieldData | null>(null);
   
   useEffect(() => {
     async function fetchOwner() {
       if (fieldId) {
         try {
-          const res = await fetch(`http://localhost:5000/api/fields/${fieldId}`);
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields/${fieldId}`);
           if (res.ok) {
             const data = await res.json();
             setFieldData(data);
             if (data.owner) {
-              setOwnerPayment(getOwnerPaymentSettings(data.owner));
+              const paymentSettings = await fetchOwnerPaymentSettings(data.owner);
+              setOwnerPayment(paymentSettings);
             }
           }
         } catch (e) {}
@@ -96,7 +123,9 @@ export function Checkout() {
   const [paid, setPaid] = useState(false);
   const activeMethod = availableMethods.find((method) => method.id === selectedMethod) ?? availableMethods[0];
   const canConfirmTransfer = activeMethod.id === 'card' || Boolean(ownerPayment.qrCodes[activeMethod.id]);
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [transferReference] = useState('SPB' + Date.now().toString().slice(-6).toUpperCase());
+  const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
 
   useEffect(() => {
     let isCustomer = false;
@@ -141,11 +170,11 @@ export function Checkout() {
       time: slots.join(', '),
       amount: finalTotal,
       paymentMethod: activeMethod.name,
-      reference: 'SPB' + Date.now().toString().slice(-6),
+      reference: transferReference,
     };
 
     try {
-      const res = await fetch('http://localhost:5000/api/bookings', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -154,6 +183,8 @@ export function Checkout() {
         body: JSON.stringify(payload)
       });
       if (res.ok) {
+        const data = await res.json();
+        setBookingResult(data.booking);
         setPaid(true);
       } else {
         const data = await res.json();
@@ -178,7 +209,7 @@ export function Checkout() {
           <h2 style={{ fontFamily: 'Barlow Condensed, sans-serif' }} className="text-4xl font-extrabold text-gray-900 uppercase tracking-tight mb-2">
             Đã Gửi Xác Nhận!
           </h2>
-          <p className="text-gray-500 text-sm mb-6">Chủ sân sẽ kiểm tra giao dịch và xác nhận lịch. Mã đặt sân: <strong className="text-green-700 font-mono">#SPB-20260925</strong></p>
+          <p className="text-gray-500 text-sm mb-6">Chủ sân sẽ kiểm tra giao dịch và xác nhận lịch. Mã đặt sân: <strong className="text-green-700 font-mono">#{bookingResult?.bookingCode || transferReference}</strong></p>
           <div className="bg-green-50 border border-green-100 rounded-xl p-4 text-left text-sm mb-6 space-y-2">
             <div className="flex justify-between"><span className="text-gray-500">Sân:</span><span className="font-medium text-gray-900">{fieldName}</span></div>
             <div className="flex justify-between"><span className="text-gray-500">Khung giờ:</span><span className="font-medium text-gray-900">{slots.join(', ')}</span></div>
@@ -275,7 +306,7 @@ export function Checkout() {
                     ) : (
                       <div className="flex justify-between gap-3"><span className="text-gray-500">Người nhận</span><span className="font-semibold text-gray-800">{ownerPayment.accountName}</span></div>
                     )}
-                    <div className="flex justify-between gap-3"><span className="text-gray-500">Nội dung</span><span className="font-mono font-semibold text-green-700">SPB20260925</span></div>
+                    <div className="flex justify-between gap-3"><span className="text-gray-500">Nội dung</span><span className="font-mono font-semibold text-green-700">{transferReference}</span></div>
                   </div>
                   {!canConfirmTransfer && <p className="mt-2 text-xs font-medium text-amber-700">Phương thức này chưa có mã QR. Vui lòng chọn chuyển khoản hoặc phương thức khác.</p>}
                 </div>

@@ -50,11 +50,21 @@ export function OwnerLayout() {
   useEffect(() => {
     // Lấy thông tin session
     const sessionStr = localStorage.getItem('sportbook-session');
-    if (sessionStr) {
-      try {
-        const session = JSON.parse(sessionStr);
-        setOwnerName(session.name || 'Chủ sân');
-      } catch (e) {}
+    if (!sessionStr) {
+      navigate('/auth');
+      return;
+    }
+    
+    try {
+      const session = JSON.parse(sessionStr);
+      if (session.role !== 'owner' && session.role !== 'admin') {
+        navigate('/');
+        return;
+      }
+      setOwnerName(session.name || 'Chủ sân');
+    } catch (e) {
+      navigate('/auth');
+      return;
     }
 
     const fetchFieldsAndProfile = async () => {
@@ -63,7 +73,7 @@ export function OwnerLayout() {
         if (!token) return;
 
         // Fetch profile
-        const profileRes = await fetch('http://localhost:5000/api/users/profile', {
+        const profileRes = await fetch(`${import.meta.env.VITE_API_URL}/api/users/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (profileRes.ok) {
@@ -75,8 +85,8 @@ export function OwnerLayout() {
 
         // Fetch fields & bookings for notifications
         const [fieldsRes, bookingsRes] = await Promise.all([
-          fetch('http://localhost:5000/api/fields'),
-          fetch('http://localhost:5000/api/bookings', { headers: { 'Authorization': `Bearer ${token}` } })
+          fetch(`${import.meta.env.VITE_API_URL}/api/fields`),
+          fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
         
         if (fieldsRes.ok) {

@@ -2,9 +2,25 @@ const { db } = require('../config/firebase');
 
 exports.createContact = async (req, res) => {
   try {
-    const data = req.body;
-    data.status = 'pending';
-    data.createdAt = new Date().toISOString();
+    const { name, email, subject, message } = req.body;
+    
+    if (!name || !email || !message) {
+      return res.status(400).json({ message: 'Vui lòng điền đầy đủ Tên, Email và Nội dung.' });
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Email không hợp lệ.' });
+    }
+    
+    const data = {
+      name,
+      email,
+      subject: subject || 'Liên hệ mới',
+      message,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
     
     const docRef = await db.collection('contacts').add(data);
     res.status(201).json({ message: 'Đã gửi liên hệ thành công.', contact: { id: docRef.id, ...data } });

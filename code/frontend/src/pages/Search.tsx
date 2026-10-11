@@ -3,9 +3,6 @@ import { useNavigate } from 'react-router';
 
 const PROVINCES = ['An Giang', 'Bà Rịa - Vũng Tàu', 'Bạc Liêu', 'Bắc Giang', 'Bắc Kạn', 'Bắc Ninh', 'Bến Tre', 'Bình Dương', 'Bình Định', 'Bình Phước', 'Bình Thuận', 'Cà Mau', 'Cao Bằng', 'Cần Thơ', 'Đà Nẵng', 'Đắk Lắk', 'Đắk Nông', 'Điện Biên', 'Đồng Nai', 'Đồng Tháp', 'Gia Lai', 'Hà Giang', 'Hà Nam', 'Hà Nội', 'Hà Tĩnh', 'Hải Dương', 'Hải Phòng', 'Hậu Giang', 'Hòa Bình', 'Hưng Yên', 'Khánh Hòa', 'Kiên Giang', 'Kon Tum', 'Lai Châu', 'Lạng Sơn', 'Lào Cai', 'Lâm Đồng', 'Long An', 'Nam Định', 'Nghệ An', 'Ninh Bình', 'Ninh Thuận', 'Phú Thọ', 'Phú Yên', 'Quảng Bình', 'Quảng Nam', 'Quảng Ngãi', 'Quảng Ninh', 'Quảng Trị', 'Sóc Trăng', 'Sơn La', 'Tây Ninh', 'Thái Bình', 'Thái Nguyên', 'Thanh Hóa', 'Thừa Thiên Huế', 'Tiền Giang', 'TP.HCM', 'Trà Vinh', 'Tuyên Quang', 'Vĩnh Long', 'Vĩnh Phúc', 'Yên Bái'];
 
-const SPORT_OPTIONS = ['Tất cả', 'Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball'];
-const AMENITY_OPTIONS = ['Bãi đỗ xe', 'Phòng thay đồ & tắm', 'Đèn chiếu sáng', 'Wi-Fi', 'Cho thuê dụng cụ', 'Căn tin', 'Camera an ninh', 'Trọng tài'];
-
 type SortKey = 'price-asc' | 'price-desc' | 'rating' | 'distance';
 
 export function SearchPage() {
@@ -21,11 +18,14 @@ export function SearchPage() {
   const [sortBy, setSortBy] = useState<SortKey>('rating');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [fields, setFields] = useState<any[]>([]);
+
+  const [sportsList, setSportsList] = useState<string[]>(['Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball']);
+  const [amenitiesList, setAmenitiesList] = useState<string[]>(['Bãi đỗ xe', 'Phòng thay đồ & tắm', 'Đèn chiếu sáng', 'Wi-Fi', 'Cho thuê dụng cụ', 'Căn tin', 'Camera an ninh', 'Trọng tài']);
   
   useEffect(() => {
     const fetchFields = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/fields');
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/fields`);
         if (res.ok) {
           const data = await res.json();
           setFields(data.filter((f: any) => f.active).map((f: any) => ({
@@ -41,12 +41,25 @@ export function SearchPage() {
         console.error(err);
       }
     };
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.sports?.length) setSportsList(data.sports);
+          if (data.amenities?.length) setAmenitiesList(data.amenities);
+        }
+      } catch (err) {
+        console.error('Lỗi lấy cấu hình:', err);
+      }
+    };
     fetchFields();
+    fetchSettings();
   }, []);
 
   const toggleSport = (sport: string) => setSelectedSports(prev => prev.includes(sport) ? prev.filter(s => s !== sport) : [...prev, sport]);
   const toggleAmenity = (a: string) => setSelectedAmenities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
-  const availableAmenities = AMENITY_OPTIONS;
+  const availableAmenities = amenitiesList;
 
   const filtered = fields
     .filter(f => selectedLocation === '' || (f.location || '').includes(selectedLocation))
@@ -136,7 +149,7 @@ export function SearchPage() {
             <div className="mb-5 pb-5 border-b border-gray-100">
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3 block">Loại sân</label>
               <div className="space-y-2">
-                {SPORT_OPTIONS.slice(1).map(sport => (
+                {sportsList.map(sport => (
                   <label key={sport} className="flex items-center gap-2 cursor-pointer group">
                     <input
                       type="checkbox"

@@ -12,7 +12,7 @@ export function AdminContacts() {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await fetch('http://localhost:5000/api/contacts', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/contacts`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -30,7 +30,7 @@ export function AdminContacts() {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/contacts/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/contacts/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

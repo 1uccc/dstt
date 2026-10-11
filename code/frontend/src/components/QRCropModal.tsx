@@ -48,9 +48,11 @@ interface QRCropModalProps {
   onClose: () => void;
   onCropComplete: (croppedFile: File) => void;
   aspectRatio?: number;
+  title?: string;
+  description?: string;
 }
 
-export function QRCropModal({ imageSrc, onClose, onCropComplete, aspectRatio = 1 }: QRCropModalProps) {
+export function QRCropModal({ imageSrc, onClose, onCropComplete, aspectRatio = 1, title = 'Cắt ảnh mã QR', description = 'Kéo và thu phóng để căn chỉnh mã QR vào giữa khung' }: QRCropModalProps) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
@@ -78,8 +80,8 @@ export function QRCropModal({ imageSrc, onClose, onCropComplete, aspectRatio = 1
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="border-b border-slate-100 p-4">
-          <h3 className="text-lg font-bold text-slate-900">Cắt ảnh mã QR</h3>
-          <p className="mt-1 text-xs text-slate-500">Kéo và thu phóng để căn chỉnh mã QR vào giữa khung</p>
+          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          <p className="mt-1 text-xs text-slate-500">{description}</p>
         </div>
         
         <div className="relative h-80 w-full bg-slate-900">

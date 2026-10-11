@@ -10,6 +10,7 @@ router.get('/:id/bookings', fieldController.getFieldBookings);
 router.get('/:id/reviews', fieldController.getFieldReviews);
 router.get('/:id/can-review', verifyToken, fieldController.canReview);
 router.post('/:id/reviews', verifyToken, fieldController.addReview);
+router.put('/:id/reviews/:reviewId/reply', verifyToken, checkRole(['admin', 'owner']), fieldController.replyReview);
 
 // Admin và Owner có thể thêm, sửa, xóa
 router.post('/', verifyToken, checkRole(['admin', 'owner']), fieldController.createField);

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
@@ -8,8 +8,6 @@ const STEPS = [
   { number: 2, title: 'Đơn vị kinh doanh', detail: 'Thông tin pháp lý cơ bản' },
   { number: 3, title: 'Cơ sở thể thao', detail: 'Thiết lập sân đầu tiên' },
 ];
-
-const AMENITIES = ['Bãi đỗ xe', 'Phòng thay đồ & tắm', 'Đèn chiếu sáng', 'Wi-Fi', 'Cho thuê dụng cụ', 'Căn tin', 'Camera an ninh', 'Trọng tài'];
 
 type FormData = {
   fullName: string;
@@ -117,6 +115,24 @@ export function OwnerRegistration() {
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sportsList, setSportsList] = useState<string[]>(['Bóng đá', 'Tennis', 'Cầu lông', 'Bóng rổ', 'Pickleball']);
+  const [amenitiesList, setAmenitiesList] = useState<string[]>(['Bãi đỗ xe', 'Phòng thay đồ & tắm', 'Đèn chiếu sáng', 'Wi-Fi', 'Cho thuê dụng cụ', 'Căn tin', 'Camera an ninh', 'Trọng tài']);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.sports?.length) setSportsList(data.sports);
+          if (data.amenities?.length) setAmenitiesList(data.amenities);
+        }
+      } catch (err) {
+        console.error('Lỗi lấy cấu hình:', err);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   const update = <K extends keyof FormData>(key: K, value: FormData[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -159,7 +175,7 @@ export function OwnerRegistration() {
       const user = userCredential.user;
       const token = await user.getIdToken();
       
-      const res = await fetch('http://localhost:5000/api/auth/sync', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -387,11 +403,7 @@ export function OwnerRegistration() {
                   <div>
                     <label htmlFor="sport" className="mb-1.5 block text-sm font-medium text-slate-700">Môn thể thao chính</label>
                     <select id="sport" value={form.sport} onChange={(event) => update('sport', event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-green-500 focus:ring-4 focus:ring-green-500/10">
-                      <option>Bóng đá</option>
-                      <option>Cầu lông</option>
-                      <option>Tennis</option>
-                      <option>Pickleball</option>
-                      <option>Bóng rổ</option>
+                      {sportsList.map(sport => <option key={sport}>{sport}</option>)}
                     </select>
                   </div>
                   <Field id="field-count" label="Số sân đang vận hành" type="number" value={form.fieldCount} onChange={(value) => update('fieldCount', value)} />
@@ -434,7 +446,7 @@ export function OwnerRegistration() {
                 <fieldset>
                   <legend className="mb-3 text-sm font-medium text-slate-700">Tiện ích hiện có</legend>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {AMENITIES.map((amenity) => (
+                    {amenitiesList.map((amenity) => (
                       <label key={amenity} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition ${
                         (form.amenities ?? []).includes(amenity) ? 'border-green-300 bg-green-50 text-green-800' : 'border-slate-200 text-slate-600 hover:border-slate-300'
                       }`}>

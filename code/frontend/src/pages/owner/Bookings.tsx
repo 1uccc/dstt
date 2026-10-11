@@ -27,7 +27,24 @@ export interface Booking {
   status: string;
   paymentMethod?: string;
   reference?: string;
+  createdAt?: string;
 }
+
+const formatCreatedAt = (isoString?: string) => {
+  if (!isoString) return '--';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${hours}:${minutes} · ${day}/${month}/${year}`;
+  } catch {
+    return isoString;
+  }
+};
 
 interface Field {
   id: string;
@@ -59,8 +76,8 @@ export function OwnerBookings() {
       if (!token) return;
       try {
         const [bookingsRes, fieldsRes] = await Promise.all([
-          fetch('http://localhost:5000/api/bookings', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('http://localhost:5000/api/fields')
+          fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${import.meta.env.VITE_API_URL}/api/fields`)
         ]);
         if (bookingsRes.ok) setBookings(await bookingsRes.json());
         if (fieldsRes.ok) setFields(await fieldsRes.json());
@@ -74,13 +91,30 @@ export function OwnerBookings() {
   const confirmBooking = async (id: string) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/bookings/${id}/status`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ status: 'confirmed' })
       });
       if (res.ok) {
         setBookings((current) => current.map((booking) => booking.id === id ? { ...booking, status: 'confirmed' } : booking));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const cancelBooking = async (id: string) => {
+    if (!window.confirm('Bạn có chắc chắn muốn hủy đơn đặt sân này không?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ status: 'cancelled' })
+      });
+      if (res.ok) {
+        setBookings((current) => current.map((booking) => booking.id === id ? { ...booking, status: 'cancelled' } : booking));
       }
     } catch (err) {
       console.error(err);
@@ -118,11 +152,11 @@ export function OwnerBookings() {
             />
           </div>
         </div>
-        <div className="grid grid-cols-7 gap-2">
+        <div className="flex overflow-x-auto pb-2 gap-2 sm:grid sm:grid-cols-7 snap-x">
           {DAYS.map((item) => {
             const dayPending = bookings.filter(b => b.date === item.fullDate && b.status === 'pending').length;
             return (
-              <button key={item.fullDate} onClick={() => setSelectedDay(item.fullDate)} className={`relative rounded-xl py-3 text-center transition-colors ${selectedDay === item.fullDate ? 'bg-green-600 text-white shadow-md shadow-green-700/20' : 'text-slate-500 hover:bg-slate-50'}`}>
+              <button key={item.fullDate} onClick={() => setSelectedDay(item.fullDate)} className={`relative shrink-0 min-w-[4rem] sm:min-w-0 snap-center rounded-xl py-3 text-center transition-colors ${selectedDay === item.fullDate ? 'bg-green-600 text-white shadow-md shadow-green-700/20' : 'text-slate-500 hover:bg-slate-50'}`}>
                 {dayPending > 0 && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 shadow-sm ring-1 ring-white"></span>}
                 <span className="block text-xs font-medium">{item.day}</span>
                 <span className="mt-1 block font-display text-2xl font-bold">{item.date}</span>
@@ -180,6 +214,7 @@ export function OwnerBookings() {
                 {booking.status === 'pending' ? (
                   <div className="flex gap-2">
                     <button onClick={() => confirmBooking(booking.id)} className="rounded-xl bg-green-600 px-4 py-2 text-xs font-bold text-white hover:bg-green-700">Xác nhận</button>
+                    <button onClick={() => cancelBooking(booking.id)} className="rounded-xl bg-red-50 px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-100">Hủy đơn</button>
                     <button onClick={() => setSelectedBooking(booking)} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-100" aria-label="Xem chi tiết">
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                     </button>
@@ -230,6 +265,10 @@ export function OwnerBookings() {
                 <div className="flex justify-between">
                   <span className="text-slate-500 text-sm">Thời gian:</span>
                   <span className="font-medium text-slate-900 text-sm">{selectedBooking.time} · {selectedBooking.date}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 text-sm">Thời gian đặt:</span>
+                  <span className="font-semibold text-blue-600 text-sm">{formatCreatedAt(selectedBooking.createdAt)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 text-sm">Thanh toán:</span>

@@ -11,8 +11,25 @@ interface Booking {
   time: string;
   amount: number;
   status: BookingStatus;
+  createdAt?: string;
 }
 import { useEffect } from 'react';
+
+const formatCreatedAt = (isoString?: string) => {
+  if (!isoString) return '--';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${hours}:${minutes} · ${day}/${month}/${year}`;
+  } catch {
+    return isoString;
+  }
+};
 
 const STATUS: Record<BookingStatus, { label: string; className: string }> = {
   paid: { label: 'Đã thanh toán', className: 'border-green-200 bg-green-50 text-green-700' },
@@ -34,7 +51,7 @@ export function AdminBookings() {
       const token = localStorage.getItem('token');
       if (!token) return;
       try {
-        const res = await fetch('http://localhost:5000/api/bookings', {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -47,7 +64,8 @@ export function AdminBookings() {
             date: b.date,
             time: b.time,
             amount: b.amount,
-            status: b.status
+            status: b.status,
+            createdAt: b.createdAt
           }));
           setBookings(mapped);
         }
@@ -70,7 +88,7 @@ export function AdminBookings() {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/bookings/${id}/status`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings/${id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -196,7 +214,11 @@ export function AdminBookings() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><p className="text-xs text-slate-400">Khách hàng</p><p className="mt-1 font-medium text-slate-800">{selected.customer}</p><p className="text-xs text-slate-500">{selected.phone}</p></div>
                 <div><p className="text-xs text-slate-400">Tổng thanh toán</p><p className="mt-1 text-lg font-bold text-slate-900">{selected.amount?.toLocaleString('vi-VN')}đ</p></div>
-                <div className="col-span-2 rounded-xl bg-slate-50 p-4"><p className="font-medium text-slate-800">{selected.field}</p><p className="mt-1 text-xs text-slate-500">{selected.date} · {selected.time}</p></div>
+                <div className="col-span-2 rounded-xl bg-slate-50 p-4">
+                  <p className="font-medium text-slate-800">{selected.field}</p>
+                  <p className="mt-1 text-xs text-slate-500">{selected.date} · {selected.time}</p>
+                  <p className="mt-1 text-xs text-blue-600 font-medium">Thời gian đặt: {formatCreatedAt(selected.createdAt)}</p>
+                </div>
               </div>
               <div>
                 <label htmlFor="booking-status" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cập nhật trạng thái</label>

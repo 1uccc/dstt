@@ -2,7 +2,15 @@ const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 
-const serviceAccount = require('./serviceAccountKey.json');
+let serviceAccount;
+
+if (process.env.FIREBASE_CREDENTIALS) {
+  // Khi chạy trên Render (hoặc môi trường production có biến môi trường)
+  serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
+} else {
+  // Khi chạy trên máy local
+  serviceAccount = require('./serviceAccountKey.json');
+}
 
 const app = initializeApp({
   credential: cert(serviceAccount)

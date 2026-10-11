@@ -30,13 +30,29 @@ export function AdminLayout() {
   const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
+    try {
+      const sessionStr = localStorage.getItem('sportbook-session');
+      if (!sessionStr) {
+        navigate('/auth');
+        return;
+      }
+      const sessionObj = JSON.parse(sessionStr);
+      if (sessionObj.role !== 'admin') {
+        navigate('/');
+        return;
+      }
+    } catch {
+      navigate('/auth');
+      return;
+    }
+
     const fetchNotifications = async () => {
       const token = localStorage.getItem('token');
       if (!token) return;
       try {
         const [usersRes, bookingsRes] = await Promise.all([
-          fetch('http://localhost:5000/api/users', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('http://localhost:5000/api/bookings', { headers: { Authorization: `Bearer ${token}` } })
+          fetch(`${import.meta.env.VITE_API_URL}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
         let notifs: any[] = [];
         if (usersRes.ok) {

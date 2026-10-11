@@ -9,8 +9,6 @@ const PAYMENT_METHODS = [
   { id: 'card', name: 'Chuyển khoản', detail: 'Tài khoản ngân hàng', mark: '••', tone: 'bg-indigo-600 text-white' },
 ];
 
-const STORAGE_KEY = 'sportbook-owner-payment';
-
 type SavedPaymentSettings = {
   bank: string;
   accountNumber: string;
@@ -19,18 +17,13 @@ type SavedPaymentSettings = {
   qrCodes: Record<string, string>;
 };
 
-function getSavedSettings(uid: string): SavedPaymentSettings | null {
+async function fetchPaymentSettings(uid: string): Promise<SavedPaymentSettings | null> {
   try {
-    const value = localStorage.getItem(`${STORAGE_KEY}-${uid}`);
-    if (!value) return null;
-    const parsed = JSON.parse(value);
-    return {
-      bank: parsed.bank ?? 'Vietcombank',
-      accountNumber: parsed.accountNumber ?? '',
-      accountName: parsed.accountName ?? '',
-      enabledMethods: Array.isArray(parsed.enabledMethods) ? parsed.enabledMethods : PAYMENT_METHODS.map((method) => method.id),
-      qrCodes: parsed.qrCodes ?? {},
-    };
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/payment/${uid}`);
+    if (res.ok) {
+      return await res.json();
+    }
+    return null;
   } catch {
     return null;
   }
@@ -48,16 +41,16 @@ export function OwnerPaymentSettings() {
   const [cropTarget, setCropTarget] = useState<{ methodId: string; imageSrc: string } | null>(null);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(user => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         setUid(user.uid);
-        const settings = getSavedSettings(user.uid);
+        const settings = await fetchPaymentSettings(user.uid);
         if (settings) {
-          setBank(settings.bank);
-          setAccountNumber(settings.accountNumber);
-          setAccountName(settings.accountName);
-          setEnabledMethods(settings.enabledMethods);
-          setQrCodes(settings.qrCodes);
+          setBank(settings.bank || 'Vietcombank');
+          setAccountNumber(settings.accountNumber || '');
+          setAccountName(settings.accountName || '');
+          setEnabledMethods(settings.enabledMethods || PAYMENT_METHODS.map(m => m.id));
+          setQrCodes(settings.qrCodes || {});
         }
       }
     });
@@ -105,10 +98,32 @@ export function OwnerPaymentSettings() {
     }
   };
 
-  const save = () => {
+  const save = async () => {
     if (!bank || !accountNumber || !accountName || !uid) return;
-    localStorage.setItem(`${STORAGE_KEY}-${uid}`, JSON.stringify({ bank, accountNumber, accountName, enabledMethods, qrCodes }));
-    setSaved(true);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Vui lòng đăng nhập lại.');
+      return;
+    }
+    
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/payment`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ bank, accountNumber, accountName, enabledMethods, qrCodes })
+      });
+      if (res.ok) {
+        setSaved(true);
+      } else {
+        alert('Có lỗi xảy ra khi lưu cài đặt.');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Lỗi kết nối.');
+    }
   };
 
   const toggleMethod = (id: string) => {

@@ -57,9 +57,9 @@ export function AdminDashboard() {
       if (!token) return;
       try {
         const [bookingsRes, fieldsRes, usersRes] = await Promise.all([
-          fetch('http://localhost:5000/api/bookings', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('http://localhost:5000/api/fields'),
-          fetch('http://localhost:5000/api/users', { headers: { Authorization: `Bearer ${token}` } })
+          fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${import.meta.env.VITE_API_URL}/api/fields`),
+          fetch(`${import.meta.env.VITE_API_URL}/api/users`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
         if (bookingsRes.ok) setBookings(await bookingsRes.json());
         if (fieldsRes.ok) setFields(await fieldsRes.json());

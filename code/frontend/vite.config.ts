@@ -3,7 +3,13 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
-const siteConfiguration = {}
+const siteConfiguration = {
+  title: 'SportBook - Đặt Sân Thể Thao',
+  description: 'Nền tảng đặt sân thể thao nhanh chóng và tiện lợi nhất',
+  openGraph: {
+    image: 'https://datsanthethao-53c04.firebaseapp.com/logo.jpg'
+  }
+}
 
 
 // Vite config — https://vitejs.dev/config/
