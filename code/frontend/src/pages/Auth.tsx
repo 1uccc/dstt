@@ -84,12 +84,35 @@ export function Auth() {
     }
   };
 
+  const redirectAfterAuth = (userRole: string = 'customer') => {
+    if (redirectTo?.startsWith('/')) {
+      if (redirectTo === '/checkout') {
+        if (userRole === 'owner') {
+          navigate('/');
+          return;
+        }
+        let pendingState: any = null;
+        try {
+          const raw = localStorage.getItem('sportbook-pending-checkout') || sessionStorage.getItem('sportbook-pending-checkout');
+          if (raw) pendingState = JSON.parse(raw);
+        } catch {}
+        navigate('/checkout', { state: pendingState || undefined });
+        return;
+      }
+      navigate(redirectTo);
+      return;
+    }
+    navigate('/');
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
     setLoading(true);
 
     try {
+      let userRole = 'customer';
+
       if (mode === 'register') {
         if (!fullName || !phone || !email || password.length < 8) {
           throw new Error('Vui lòng nhập đủ thông tin và dùng mật khẩu từ 8 ký tự.');
@@ -105,7 +128,7 @@ export function Auth() {
 
         localStorage.setItem('token', token);
         localStorage.setItem('sportbook-session', JSON.stringify({ role: 'customer', email, name: fullName }));
-        
+        userRole = 'customer';
       } else {
         // Đăng nhập
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -139,9 +162,10 @@ export function Auth() {
 
         localStorage.setItem('token', token);
         localStorage.setItem('sportbook-session', JSON.stringify({ role, email, name }));
+        userRole = role;
       }
       
-      navigate(redirectTo?.startsWith('/') ? redirectTo : '/');
+      redirectAfterAuth(userRole);
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
         setError('Email này đã được đăng ký.');
@@ -191,7 +215,7 @@ export function Auth() {
       localStorage.setItem('token', token);
       localStorage.setItem('sportbook-session', JSON.stringify({ role, email: user.email, name: user.displayName }));
       
-      navigate(redirectTo?.startsWith('/') ? redirectTo : '/');
+      redirectAfterAuth(role);
     } catch (err: any) {
       setError('Đã xảy ra lỗi với Google: ' + err.message);
     } finally {

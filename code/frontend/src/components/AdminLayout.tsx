@@ -22,6 +22,47 @@ const NAV_ITEMS = [
   ) },
 ];
 
+const NOTIF_READ_KEY = 'sportbook-admin-read-notifs';
+const NOTIF_CLEARED_KEY = 'sportbook-admin-cleared-timestamp';
+
+function getReadNotifIds(): string[] {
+  try {
+    const raw = localStorage.getItem(NOTIF_READ_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getClearedTimestamp(): number {
+  try {
+    const raw = localStorage.getItem(NOTIF_CLEARED_KEY);
+    return raw ? Number(raw) || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function formatTimeAgo(dateInput?: string | number | Date) {
+  if (!dateInput) return 'Gần đây';
+  try {
+    const past = new Date(dateInput).getTime();
+    if (isNaN(past)) return 'Gần đây';
+    const now = Date.now();
+    const diffSec = Math.floor((now - past) / 1000);
+    if (diffSec < 60) return 'Vừa xong';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} phút trước`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour} giờ trước`;
+    const diffDay = Math.floor(diffHour / 24);
+    if (diffDay < 7) return `${diffDay} ngày trước`;
+    return new Date(past).toLocaleDateString('vi-VN');
+  } catch {
+    return 'Gần đây';
+  }
+}
+
 export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -54,43 +95,58 @@ export function AdminLayout() {
           fetch(`${import.meta.env.VITE_API_URL}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
+
+        const readIds = getReadNotifIds();
+        const clearedTimestamp = getClearedTimestamp();
+
         let notifs: any[] = [];
         if (usersRes.ok) {
           const users = await usersRes.json();
           const pendingUsers = users.filter((u: any) => u.status === 'pending');
           pendingUsers.forEach((u: any) => {
-            notifs.push({
-              id: `u-${u.id || u._id}`,
-              title: 'Tài khoản cần duyệt',
-              description: `${u.fullName} (${u.role === 'owner' ? 'Chủ sân' : 'Khách hàng'}) đang chờ duyệt.`,
-              time: 'Gần đây',
-              timestamp: new Date(u.createdAt || Date.now()).getTime(),
-              read: false,
-            });
+            const timestamp = new Date(u.createdAt || Date.now()).getTime();
+            if (timestamp > clearedTimestamp) {
+              const id = `u-${u.id || u._id}`;
+              notifs.push({
+                id,
+                title: 'Tài khoản cần duyệt',
+                description: `${u.fullName} (${u.role === 'owner' ? 'Chủ sân' : 'Khách hàng'}) đang chờ duyệt.`,
+                time: formatTimeAgo(u.createdAt),
+                timestamp,
+                read: readIds.includes(id),
+                link: '/admin/users'
+              });
+            }
           });
         }
         if (bookingsRes.ok) {
           const bookings = await bookingsRes.json();
           const recentBookings = bookings.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 10);
           recentBookings.forEach((b: any) => {
-            if (b.status === 'paid' || b.status === 'confirmed') {
-              notifs.push({
-                id: `b-${b.id || b._id}`,
-                title: 'Đơn đặt sân mới',
-                description: `Đơn #SPB-${(b._id || b.id || 'xxxx').slice(-4).toUpperCase()} đã được thanh toán.`,
-                time: 'Gần đây',
-                timestamp: new Date(b.createdAt || Date.now()).getTime(),
-                read: false,
-              });
-            } else if (b.status === 'cancelled') {
-              notifs.push({
-                id: `b-${b.id || b._id}`,
-                title: 'Đơn đặt sân bị hủy',
-                description: `Đơn #SPB-${(b._id || b.id || 'xxxx').slice(-4).toUpperCase()} đã bị hủy.`,
-                time: 'Gần đây',
-                timestamp: new Date(b.createdAt || Date.now()).getTime(),
-                read: false,
-              });
+            const timestamp = new Date(b.createdAt || Date.now()).getTime();
+            if (timestamp > clearedTimestamp) {
+              const id = `b-${b.id || b._id}`;
+              if (b.status === 'paid' || b.status === 'confirmed') {
+                notifs.push({
+                  id,
+                  title: 'Đơn đặt sân mới',
+                  description: `Đơn #SPB-${(b._id || b.id || 'xxxx').slice(-4).toUpperCase()} đã được thanh toán.`,
+                  time: formatTimeAgo(b.createdAt),
+                  timestamp,
+                  read: readIds.includes(id),
+                  link: '/admin/bookings'
+                });
+              } else if (b.status === 'cancelled') {
+                notifs.push({
+                  id,
+                  title: 'Đơn đặt sân bị hủy',
+                  description: `Đơn #SPB-${(b._id || b.id || 'xxxx').slice(-4).toUpperCase()} đã bị hủy.`,
+                  time: formatTimeAgo(b.createdAt),
+                  timestamp,
+                  read: readIds.includes(id),
+                  link: '/admin/bookings'
+                });
+              }
             }
           });
         }
@@ -102,6 +158,39 @@ export function AdminLayout() {
     };
     fetchNotifications();
   }, []);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const handleMarkAllAsRead = () => {
+    const currentIds = notifications.map(n => n.id);
+    try {
+      const existing = getReadNotifIds();
+      const updated = Array.from(new Set([...existing, ...currentIds]));
+      localStorage.setItem(NOTIF_READ_KEY, JSON.stringify(updated));
+    } catch {}
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const handleClearAll = () => {
+    try {
+      localStorage.setItem(NOTIF_CLEARED_KEY, String(Date.now()));
+    } catch {}
+    setNotifications([]);
+  };
+
+  const handleNotificationClick = (n: any) => {
+    try {
+      const existing = getReadNotifIds();
+      if (!existing.includes(n.id)) {
+        localStorage.setItem(NOTIF_READ_KEY, JSON.stringify([...existing, n.id]));
+      }
+    } catch {}
+    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+    setNotificationOpen(false);
+    if (n.link) {
+      navigate(n.link);
+    }
+  };
 
   const isActive = (to: string) => to === '/admin' ? location.pathname === '/admin' : location.pathname.startsWith(to);
   const todayDateString = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -183,32 +272,100 @@ export function AdminLayout() {
             </div>
           </div>
           <div className="relative flex items-center gap-2">
-            <button onClick={() => setNotificationOpen((open) => !open)} className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100" aria-label="Thông báo">
+            <button 
+              onClick={() => setNotificationOpen((open) => !open)} 
+              className={`relative p-2 rounded-lg transition-colors ${
+                notificationOpen ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-100'
+              }`} 
+              aria-label="Thông báo"
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 ring-2 ring-white"></span>
+                </span>
+              )}
             </button>
             <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold">AD</div>
+            
             {notificationOpen && (
-              <div className="absolute right-0 top-12 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                  <p className="text-sm font-semibold text-slate-900">Thông báo</p>
-                  <button onClick={() => { setNotificationOpen(false); setNotifications([]); }} className="text-xs font-medium text-green-700">Đánh dấu đã đọc</button>
-                </div>
-                <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
-                  {notifications.length > 0 ? (
-                    notifications.map((n) => (
-                      <div key={n.id} className="px-4 py-3 hover:bg-slate-50">
-                        <div className="flex items-start gap-3">
-                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-green-500" />
-                          <div><p className="text-sm font-medium text-slate-800">{n.title}</p><p className="mt-0.5 text-xs text-slate-500">{n.description}</p><p className="mt-1 text-xs text-slate-400">{n.time}</p></div>
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setNotificationOpen(false)} />
+                <div className="absolute right-0 top-12 z-50 w-80 sm:w-96 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 bg-slate-50/50">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-slate-900">Thông báo</p>
+                      {unreadCount > 0 ? (
+                        <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-bold">
+                          {unreadCount} mới
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-medium">Đã đọc hết</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {unreadCount > 0 && (
+                        <button 
+                          onClick={handleMarkAllAsRead} 
+                          className="text-xs font-semibold text-green-700 hover:text-green-800 transition-colors"
+                        >
+                          Đánh dấu đã đọc
+                        </button>
+                      )}
+                      {notifications.length > 0 && (
+                        <button 
+                          onClick={handleClearAll} 
+                          className="text-xs text-slate-400 hover:text-red-600 transition-colors"
+                          title="Xóa tất cả thông báo"
+                        >
+                          Xóa hết
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                    {notifications.length > 0 ? (
+                      notifications.map((n) => (
+                        <div 
+                          key={n.id} 
+                          onClick={() => handleNotificationClick(n)}
+                          className={`px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors ${
+                            n.read ? 'opacity-70 bg-white' : 'bg-green-50/20'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                              n.read ? 'bg-slate-300' : 'bg-green-500 ring-2 ring-green-100'
+                            }`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <p className={`text-sm leading-tight ${n.read ? 'font-medium text-slate-700' : 'font-bold text-slate-900'}`}>
+                                  {n.title}
+                                </p>
+                                {!n.read && (
+                                  <span className="shrink-0 text-[10px] font-bold text-green-700 bg-green-100/70 px-1.5 py-0.5 rounded-full">
+                                    Mới
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 text-xs text-slate-600 leading-normal">{n.description}</p>
+                              <p className="mt-1 text-[11px] text-slate-400">{n.time}</p>
+                            </div>
+                          </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="px-4 py-8 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                        <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <span>Không có thông báo mới.</span>
                       </div>
-                    ))
-                  ) : (
-                    <div className="px-4 py-6 text-center text-xs text-slate-500">Không có thông báo mới.</div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
         </header>

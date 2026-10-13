@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 
 interface Booking {
   id: string;
@@ -32,11 +33,20 @@ const formatCreatedAt = (isoString?: string) => {
 };
 
 export function CustomerBookings() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
   useEffect(() => {
+    try {
+      const session = JSON.parse(localStorage.getItem('sportbook-session') ?? '{}');
+      if (session.role === 'owner') {
+        navigate('/owner/bookings', { replace: true });
+        return;
+      }
+    } catch {}
+
     const fetchBookings = async () => {
       try {
         const token = localStorage.getItem('token');

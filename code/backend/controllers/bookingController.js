@@ -24,6 +24,14 @@ exports.createBooking = async (req, res) => {
   try {
     const { customerName, phone, fieldId, date, time, amount, paymentMethod, reference } = req.body;
 
+    // Kiểm tra phân quyền: Chủ sân không được phép đặt sân
+    if (req.user && req.user.role === 'owner') {
+      return res.status(403).json({ message: 'Tài khoản Chủ sân không thể thực hiện đặt sân. Vui lòng sử dụng tài khoản Khách hàng.' });
+    }
+    if (req.user && req.user.role !== 'customer') {
+      return res.status(403).json({ message: 'Chỉ tài khoản Khách hàng mới có thể đặt sân.' });
+    }
+
     // Validate input cơ bản
     if (!fieldId || !date || !time) {
       return res.status(400).json({ message: 'Thiếu thông tin bắt buộc (fieldId, date, time).' });

@@ -51,6 +51,8 @@ const getOwnerPaymentSettings = async (req, res) => {
         bank: 'Vietcombank',
         accountNumber: '',
         accountName: '',
+        momoPhone: '',
+        momoName: '',
         enabledMethods: ['zalopay', 'momo', 'vnpay', 'card'],
         qrCodes: {}
       });
@@ -65,10 +67,18 @@ const getOwnerPaymentSettings = async (req, res) => {
 const updateOwnerPaymentSettings = async (req, res) => {
   try {
     const ownerId = req.user.uid;
-    const { bank, accountNumber, accountName, enabledMethods, qrCodes } = req.body;
+    const { bank, accountNumber, accountName, momoPhone, momoName, enabledMethods, qrCodes } = req.body;
     
     const docRef = db.collection('paymentSettings').doc(ownerId);
-    await docRef.set({ bank, accountNumber, accountName, enabledMethods, qrCodes }, { merge: true });
+    await docRef.set({
+      bank,
+      accountNumber,
+      accountName,
+      momoPhone: momoPhone || '',
+      momoName: momoName || '',
+      enabledMethods,
+      qrCodes
+    }, { merge: true });
     
     res.json({ message: 'Cập nhật thành công' });
   } catch (error) {

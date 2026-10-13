@@ -17,7 +17,16 @@ app.set('trust proxy', 1);
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'https://datsanthethao-53c04.web.app', 'https://datsanthethao-53c04.firebaseapp.com'],
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:8443',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:8443',
+    /^http:\/\/localhost:\d+$/,
+    'https://datsanthethao-53c04.web.app',
+    'https://datsanthethao-53c04.firebaseapp.com'
+  ],
   credentials: true
 }));
 app.use(express.json({ limit: '50kb' }));

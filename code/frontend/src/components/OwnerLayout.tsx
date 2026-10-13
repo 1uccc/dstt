@@ -26,6 +26,17 @@ const NAV_ITEMS = [
   { to: '/owner/profile', label: 'Hồ sơ', icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
 ];
 
+const OWNER_NOTIF_READ_KEY = 'sportbook-owner-read-notifs';
+
+function getOwnerReadNotifIds(): string[] {
+  try {
+    const raw = localStorage.getItem(OWNER_NOTIF_READ_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function OwnerLayout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -99,7 +110,13 @@ export function OwnerLayout() {
 
         if (bookingsRes.ok) {
           const bookings = await bookingsRes.json();
-          const pendingBookings = bookings.filter((b: any) => b.status === 'pending');
+          const readIds = getOwnerReadNotifIds();
+          const pendingBookings = bookings
+            .filter((b: any) => b.status === 'pending')
+            .map((b: any) => ({
+              ...b,
+              read: readIds.includes(b.id || b._id)
+            }));
           setNotifications(pendingBookings);
         }
       } catch (err) {
@@ -115,6 +132,29 @@ export function OwnerLayout() {
 
     return () => unsubscribe();
   }, []);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const handleMarkAllAsRead = () => {
+    const currentIds = notifications.map(n => n.id || n._id);
+    try {
+      const existing = getOwnerReadNotifIds();
+      const updated = Array.from(new Set([...existing, ...currentIds]));
+      localStorage.setItem(OWNER_NOTIF_READ_KEY, JSON.stringify(updated));
+    } catch {}
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const handleNotificationClick = (notiId: string) => {
+    try {
+      const existing = getOwnerReadNotifIds();
+      if (!existing.includes(notiId)) {
+        localStorage.setItem(OWNER_NOTIF_READ_KEY, JSON.stringify([...existing, notiId]));
+      }
+    } catch {}
+    setNotifications(prev => prev.map(n => (n.id === notiId || n._id === notiId) ? { ...n, read: true } : n));
+    setShowNotifications(false);
+  };
 
   const isActive = (to: string) =>
     to === '/owner' ? location.pathname === '/owner' : location.pathname.startsWith(to);
@@ -205,46 +245,65 @@ export function OwnerLayout() {
           <div className="flex items-center gap-2">
             <div className="relative">
               <button 
-                onClick={() => setShowNotifications(!showNotifications)}
+                onClick={() => setShowNotifications(!showNotifications)} 
                 className={`relative rounded-xl border p-2.5 transition-colors ${showNotifications ? 'bg-slate-100 border-slate-300' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`} 
                 aria-label="Thông báo"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-4-5.7V5a2 2 0 10-4 0v.3A6 6 0 006 11v3.2a2 2 0 01-.6 1.4L4 17h11zm0 0v1a3 3 0 11-6 0v-1h6z" /></svg>
-                {notifications.length > 0 && (
+                {unreadCount > 0 && (
                   <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
                 )}
               </button>
 
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
-                  <div className="mb-2 flex items-center justify-between px-3 pt-2">
-                    <p className="font-display font-bold uppercase text-slate-900">Thông báo</p>
-                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-600">{notifications.length} mới</span>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.length > 0 ? (
-                      notifications.map(noti => (
-                        <Link 
-                          key={noti.id} 
-                          to="/owner/bookings" 
-                          onClick={() => setShowNotifications(false)}
-                          className="block rounded-xl p-3 hover:bg-slate-50"
-                        >
-                          <p className="text-sm font-semibold text-slate-800">
-                            Đơn đặt sân mới từ <span className="text-green-700">{noti.customerName}</span>
-                          </p>
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            {noti.fieldName} · {noti.time} ngày {noti.date}
-                          </p>
-                        </Link>
-                      ))
-                    ) : (
-                      <div className="p-4 text-center text-sm text-slate-500">
-                        Bạn không có thông báo mới.
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
+                  <div className="absolute right-0 mt-2 w-80 sm:w-88 z-50 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+                    <div className="mb-2 flex items-center justify-between border-b border-slate-100 px-3 pb-2 pt-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-display font-bold uppercase text-slate-900">Thông báo</p>
+                        {unreadCount > 0 ? (
+                          <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-600">{unreadCount} mới</span>
+                        ) : (
+                          <span className="text-xs text-slate-400 font-medium">Đã đọc hết</span>
+                        )}
                       </div>
-                    )}
+                      {unreadCount > 0 && (
+                        <button onClick={handleMarkAllAsRead} className="text-xs font-medium text-green-700 hover:text-green-800 transition-colors">
+                          Đánh dấu đã đọc
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.length > 0 ? (
+                        notifications.map(noti => (
+                          <Link 
+                            key={noti.id || noti._id} 
+                            to="/owner/bookings" 
+                            onClick={() => handleNotificationClick(noti.id || noti._id)}
+                            className={`block rounded-xl p-3 transition-colors hover:bg-slate-50 ${noti.read ? 'opacity-70 bg-white' : 'bg-green-50/30'}`}
+                          >
+                            <div className="flex items-start gap-2">
+                              <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${noti.read ? 'bg-slate-300' : 'bg-green-500 ring-2 ring-green-100'}`} />
+                              <div>
+                                <p className={`text-sm ${noti.read ? 'font-medium text-slate-700' : 'font-bold text-slate-900'}`}>
+                                  Đơn đặt sân mới từ <span className="text-green-700">{noti.customerName}</span>
+                                </p>
+                                <p className="mt-0.5 text-xs text-slate-500">
+                                  {noti.fieldName} · {noti.time} ngày {noti.date}
+                                </p>
+                              </div>
+                            </div>
+                          </Link>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-sm text-slate-500">
+                          Bạn không có thông báo mới.
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
             <div className="hidden text-right sm:block ml-2">
