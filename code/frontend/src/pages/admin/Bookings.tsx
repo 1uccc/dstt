@@ -11,33 +11,13 @@ interface Booking {
   time: string;
   amount: number;
   status: BookingStatus;
+  note?: string;
   createdAt?: string;
 }
 import { useEffect } from 'react';
-
-const formatCreatedAt = (isoString?: string) => {
-  if (!isoString) return '--';
-  try {
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return isoString;
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${hours}:${minutes} · ${day}/${month}/${year}`;
-  } catch {
-    return isoString;
-  }
-};
-
-const STATUS: Record<BookingStatus, { label: string; className: string }> = {
-  paid: { label: 'Đã thanh toán', className: 'border-green-200 bg-green-50 text-green-700' },
-  pending: { label: 'Chờ thanh toán', className: 'border-amber-200 bg-amber-50 text-amber-700' },
-  cancelled: { label: 'Đã hủy', className: 'border-red-200 bg-red-50 text-red-600' },
-  completed: { label: 'Hoàn thành', className: 'border-blue-200 bg-blue-50 text-blue-700' },
-  confirmed: { label: 'Đã xác nhận', className: 'border-blue-200 bg-blue-50 text-blue-700' },
-};
+import { StatusBadge } from '../../components/common/StatusBadge';
+import { formatCreatedAt } from '../../utils/date';
+import { STATUS_CONFIG, BOOKING_STATUS } from '../../constants';
 
 export function AdminBookings() {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -65,6 +45,7 @@ export function AdminBookings() {
             time: b.time,
             amount: b.amount,
             status: b.status,
+            note: b.note || '',
             createdAt: b.createdAt
           }));
           setBookings(mapped);
@@ -114,7 +95,7 @@ export function AdminBookings() {
       ['Mã đơn', 'Khách hàng', 'Sân', 'Ngày', 'Khung giờ', 'Giá', 'Trạng thái'],
       ...filtered.map((booking) => [
         booking.id, booking.customer, booking.field, booking.date, booking.time,
-        String(booking.amount), STATUS[booking.status].label,
+        String(booking.amount), STATUS_CONFIG[booking.status]?.label || booking.status,
       ]),
     ];
     const blob = new Blob([`\uFEFF${rows.map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n')}`], { type: 'text/csv;charset=utf-8' });
@@ -164,7 +145,7 @@ export function AdminBookings() {
             </div>
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | BookingStatus)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 outline-none focus:border-green-500">
               <option value="all">Tất cả trạng thái</option>
-              {Object.entries(STATUS).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}
+              {Object.entries(STATUS_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}
             </select>
             <button onClick={exportCsv} className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14" /></svg>
@@ -185,13 +166,19 @@ export function AdminBookings() {
                   <td className="px-4 py-4">
                     <p className="whitespace-nowrap font-medium text-slate-900">{booking.customer}</p>
                     <p className="mt-0.5 text-xs text-slate-400">{booking.phone}</p>
+                    {booking.note && (
+                      <div className="mt-1 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60 inline-flex items-center gap-1 max-w-[200px]">
+                        <span className="font-semibold text-amber-800 shrink-0">Note:</span>
+                        <span className="truncate">{booking.note}</span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-4">
                     <p className="whitespace-nowrap text-slate-700">{booking.field}</p>
                     <p className="mt-0.5 whitespace-nowrap text-xs text-slate-400">{booking.date} · {booking.time}</p>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 font-semibold text-slate-900">{booking.amount?.toLocaleString('vi-VN')}đ</td>
-                  <td className="px-4 py-4"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS[booking.status]?.className || STATUS['pending'].className}`}>{STATUS[booking.status]?.label || 'Chờ xác nhận'}</span></td>
+                  <td className="px-4 py-4"><StatusBadge status={booking.status} /></td>
                   <td className="px-4 py-4">
                     <button onClick={() => setSelected(booking)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-50">Chi tiết</button>
                   </td>
@@ -219,11 +206,24 @@ export function AdminBookings() {
                   <p className="mt-1 text-xs text-slate-500">{selected.date} · {selected.time}</p>
                   <p className="mt-1 text-xs text-blue-600 font-medium">Thời gian đặt: {formatCreatedAt(selected.createdAt)}</p>
                 </div>
+                {selected.note && (
+                  <div className="col-span-2 bg-amber-50/90 border border-amber-200 rounded-xl p-3.5 text-xs">
+                    <p className="font-bold text-amber-900 mb-1 flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                      </svg>
+                      Ghi chú từ khách hàng:
+                    </p>
+                    <p className="text-slate-800 bg-white/90 p-2 rounded-lg border border-amber-100 whitespace-pre-wrap leading-relaxed">
+                      {selected.note}
+                    </p>
+                  </div>
+                )}
               </div>
               <div>
                 <label htmlFor="booking-status" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cập nhật trạng thái</label>
                 <select id="booking-status" value={selected.status} onChange={(event) => updateStatus(selected.id, event.target.value as BookingStatus)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-green-500">
-                  {Object.entries(STATUS).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}
+                  {Object.entries(STATUS_CONFIG).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}
                 </select>
               </div>
             </div>

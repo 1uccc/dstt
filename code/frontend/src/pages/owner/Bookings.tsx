@@ -18,6 +18,7 @@ const getWeekDays = (startDate: Date) => {
 
 export interface Booking {
   id: string;
+  bookingCode?: string;
   time: string;
   date: string;
   customerName: string;
@@ -27,24 +28,12 @@ export interface Booking {
   status: string;
   paymentMethod?: string;
   reference?: string;
+  note?: string;
   createdAt?: string;
 }
 
-const formatCreatedAt = (isoString?: string) => {
-  if (!isoString) return '--';
-  try {
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return isoString;
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${hours}:${minutes} · ${day}/${month}/${year}`;
-  } catch {
-    return isoString;
-  }
-};
+import { StatusBadge } from '../../components/common/StatusBadge';
+import { formatCreatedAt } from '../../utils/date';
 
 interface Field {
   id: string;
@@ -207,10 +196,23 @@ export function OwnerBookings() {
                   <p className="font-semibold text-slate-900">{booking.customerName}</p>
                   <p className="text-xs text-slate-500">{booking.phone} · {booking.fieldName}</p>
                   {booking.paymentMethod && <p className="mt-1 text-xs font-medium text-blue-600">{booking.paymentMethod} · #{booking.reference}</p>}
+                  {booking.note && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50/90 px-2.5 py-1 rounded-lg border border-amber-200/70 max-w-sm">
+                      <svg className="w-3.5 h-3.5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                      </svg>
+                      <span className="truncate">
+                        <strong className="font-semibold text-amber-900">Ghi chú:</strong> {booking.note}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex items-center justify-between gap-4 sm:justify-end">
-                <div className="text-right"><p className="font-semibold text-slate-900">{(booking.amount || 0).toLocaleString('vi-VN')}đ</p><p className={`text-xs font-medium ${booking.status === 'pending' ? 'text-amber-600' : booking.status === 'paid' ? 'text-blue-600' : 'text-green-700'}`}>{booking.status === 'pending' ? 'Chờ xác nhận' : booking.status === 'paid' ? 'Đã thanh toán' : 'Đã xác nhận'}</p></div>
+                <div className="text-right flex flex-col items-end gap-1">
+                  <p className="font-semibold text-slate-900">{(booking.amount || 0).toLocaleString('vi-VN')}đ</p>
+                  <StatusBadge status={booking.status} size="sm" />
+                </div>
                 {booking.status === 'pending' ? (
                   <div className="flex gap-2">
                     <button onClick={() => confirmBooking(booking.id)} className="rounded-xl bg-green-600 px-4 py-2 text-xs font-bold text-white hover:bg-green-700">Xác nhận</button>
@@ -276,9 +278,31 @@ export function OwnerBookings() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 text-sm">Mã đơn:</span>
-                  <span className="font-mono text-slate-900 text-sm">#{selectedBooking.reference || selectedBooking.id.slice(-6).toUpperCase()}</span>
+                  <span className="font-mono text-slate-900 text-sm">#{selectedBooking.reference || selectedBooking.bookingCode || selectedBooking.id.slice(-6).toUpperCase()}</span>
                 </div>
               </div>
+
+              {/* Customer Note Section */}
+              {selectedBooking.note ? (
+                <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3.5 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-900 mb-1.5">
+                    <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                    </svg>
+                    <span>Ghi chú từ khách hàng:</span>
+                  </div>
+                  <p className="text-slate-800 font-medium bg-white/90 p-2.5 rounded-lg border border-amber-100 whitespace-pre-wrap leading-relaxed shadow-xs">
+                    {selectedBooking.note}
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-400 italic flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  <span>Không có ghi chú từ khách hàng</span>
+                </div>
+              )}
               
               <div className="border-t border-dashed border-slate-200 pt-4 mt-4 flex justify-between items-center">
                 <span className="font-semibold text-slate-700">Tổng tiền</span>

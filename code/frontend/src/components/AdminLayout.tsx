@@ -22,53 +22,22 @@ const NAV_ITEMS = [
   ) },
 ];
 
-const NOTIF_READ_KEY = 'sportbook-admin-read-notifs';
-const NOTIF_CLEARED_KEY = 'sportbook-admin-cleared-timestamp';
-
-function getReadNotifIds(): string[] {
-  try {
-    const raw = localStorage.getItem(NOTIF_READ_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function getClearedTimestamp(): number {
-  try {
-    const raw = localStorage.getItem(NOTIF_CLEARED_KEY);
-    return raw ? Number(raw) || 0 : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function formatTimeAgo(dateInput?: string | number | Date) {
-  if (!dateInput) return 'Gần đây';
-  try {
-    const past = new Date(dateInput).getTime();
-    if (isNaN(past)) return 'Gần đây';
-    const now = Date.now();
-    const diffSec = Math.floor((now - past) / 1000);
-    if (diffSec < 60) return 'Vừa xong';
-    const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `${diffMin} phút trước`;
-    const diffHour = Math.floor(diffMin / 60);
-    if (diffHour < 24) return `${diffHour} giờ trước`;
-    const diffDay = Math.floor(diffHour / 24);
-    if (diffDay < 7) return `${diffDay} ngày trước`;
-    return new Date(past).toLocaleDateString('vi-VN');
-  } catch {
-    return 'Gần đây';
-  }
-}
+import { formatTimeAgo } from '../utils/date';
+import { useNotificationSync } from '../hooks/useNotificationSync';
+import { apiClient } from '../utils/apiClient';
+import { NotificationItem } from '../types';
 
 export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setSidebarOpen(false);
+    setNotificationOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     try {
@@ -86,106 +55,81 @@ export function AdminLayout() {
       navigate('/auth');
       return;
     }
+  }, [navigate]);
 
-    const fetchNotifications = async () => {
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead: handleMarkAllAsRead,
+    clearAll: handleClearAll,
+  } = useNotificationSync({
+    storageKeyPrefix: 'sportbook-admin',
+    fetchNotifications: async (clearedTimestamp, readIds) => {
       const token = localStorage.getItem('token');
-      if (!token) return;
-      try {
-        const [usersRes, bookingsRes] = await Promise.all([
-          fetch(`${import.meta.env.VITE_API_URL}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, { headers: { Authorization: `Bearer ${token}` } })
-        ]);
+      if (!token) return [];
 
-        const readIds = getReadNotifIds();
-        const clearedTimestamp = getClearedTimestamp();
+      const [users, bookings] = await Promise.all([
+        apiClient.get<any[]>('/api/users').catch(() => []),
+        apiClient.get<any[]>('/api/bookings').catch(() => []),
+      ]);
 
-        let notifs: any[] = [];
-        if (usersRes.ok) {
-          const users = await usersRes.json();
-          const pendingUsers = users.filter((u: any) => u.status === 'pending');
-          pendingUsers.forEach((u: any) => {
-            const timestamp = new Date(u.createdAt || Date.now()).getTime();
-            if (timestamp > clearedTimestamp) {
-              const id = `u-${u.id || u._id}`;
-              notifs.push({
-                id,
-                title: 'Tài khoản cần duyệt',
-                description: `${u.fullName} (${u.role === 'owner' ? 'Chủ sân' : 'Khách hàng'}) đang chờ duyệt.`,
-                time: formatTimeAgo(u.createdAt),
-                timestamp,
-                read: readIds.includes(id),
-                link: '/admin/users'
-              });
-            }
+      const notifs: NotificationItem[] = [];
+
+      // Thông báo tài khoản cần duyệt
+      const pendingUsers = (users || []).filter((u: any) => u.status === 'pending');
+      pendingUsers.forEach((u: any) => {
+        const timestamp = new Date(u.createdAt || Date.now()).getTime();
+        if (timestamp > clearedTimestamp) {
+          const id = `u-${u.id || u._id}`;
+          notifs.push({
+            id,
+            title: 'Tài khoản cần duyệt',
+            description: `${u.fullName} (${u.role === 'owner' ? 'Chủ sân' : 'Khách hàng'}) đang chờ duyệt.`,
+            time: formatTimeAgo(u.createdAt),
+            timestamp,
+            read: readIds.includes(id),
+            link: '/admin/users',
           });
         }
-        if (bookingsRes.ok) {
-          const bookings = await bookingsRes.json();
-          const recentBookings = bookings.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 10);
-          recentBookings.forEach((b: any) => {
-            const timestamp = new Date(b.createdAt || Date.now()).getTime();
-            if (timestamp > clearedTimestamp) {
-              const id = `b-${b.id || b._id}`;
-              if (b.status === 'paid' || b.status === 'confirmed') {
-                notifs.push({
-                  id,
-                  title: 'Đơn đặt sân mới',
-                  description: `Đơn #SPB-${(b._id || b.id || 'xxxx').slice(-4).toUpperCase()} đã được thanh toán.`,
-                  time: formatTimeAgo(b.createdAt),
-                  timestamp,
-                  read: readIds.includes(id),
-                  link: '/admin/bookings'
-                });
-              } else if (b.status === 'cancelled') {
-                notifs.push({
-                  id,
-                  title: 'Đơn đặt sân bị hủy',
-                  description: `Đơn #SPB-${(b._id || b.id || 'xxxx').slice(-4).toUpperCase()} đã bị hủy.`,
-                  time: formatTimeAgo(b.createdAt),
-                  timestamp,
-                  read: readIds.includes(id),
-                  link: '/admin/bookings'
-                });
-              }
-            }
-          });
+      });
+
+      // Thông báo đơn đặt sân mới / bị hủy
+      (bookings || []).forEach((b: any) => {
+        const timestamp = new Date(b.createdAt || Date.now()).getTime();
+        if (timestamp > clearedTimestamp) {
+          const id = `b-${b.id || b._id}`;
+          const code = (b.bookingCode || b.id || 'xxxx').slice(-4).toUpperCase();
+          if (b.status === 'paid' || b.status === 'confirmed') {
+            notifs.push({
+              id,
+              title: 'Đơn đặt sân mới',
+              description: `Đơn #${code} đã được thanh toán.`,
+              time: formatTimeAgo(b.createdAt),
+              timestamp,
+              read: readIds.includes(id),
+              link: '/admin/bookings',
+            });
+          } else if (b.status === 'cancelled') {
+            notifs.push({
+              id,
+              title: 'Đơn đặt sân bị hủy',
+              description: `Đơn #${code} đã bị hủy.`,
+              time: formatTimeAgo(b.createdAt),
+              timestamp,
+              read: readIds.includes(id),
+              link: '/admin/bookings',
+            });
+          }
         }
-        notifs.sort((a, b) => b.timestamp - a.timestamp);
-        setNotifications(notifs.slice(0, 10));
-      } catch (err) {
-        console.error('Error fetching admin notifications:', err);
-      }
-    };
-    fetchNotifications();
-  }, []);
+      });
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+      return notifs;
+    },
+  });
 
-  const handleMarkAllAsRead = () => {
-    const currentIds = notifications.map(n => n.id);
-    try {
-      const existing = getReadNotifIds();
-      const updated = Array.from(new Set([...existing, ...currentIds]));
-      localStorage.setItem(NOTIF_READ_KEY, JSON.stringify(updated));
-    } catch {}
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  const handleClearAll = () => {
-    try {
-      localStorage.setItem(NOTIF_CLEARED_KEY, String(Date.now()));
-    } catch {}
-    setNotifications([]);
-  };
-
-  const handleNotificationClick = (n: any) => {
-    try {
-      const existing = getReadNotifIds();
-      if (!existing.includes(n.id)) {
-        localStorage.setItem(NOTIF_READ_KEY, JSON.stringify([...existing, n.id]));
-      }
-    } catch {}
-    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+  const handleNotificationClick = (n: NotificationItem) => {
+    markAsRead(n.id);
     setNotificationOpen(false);
     if (n.link) {
       navigate(n.link);

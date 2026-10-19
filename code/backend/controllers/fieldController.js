@@ -1,23 +1,19 @@
-const { db } = require('../config/firebase');
+/**
+ * [CONTROLLER LAYER] - fieldController
+ * Tiếp nhận HTTP Request liên quan đến Sân & Đánh giá,
+ * kết hợp cùng FieldFactory (Factory Pattern) để tạo đối tượng chuẩn hóa
+ * và ủy quyền cho FieldRepository / BookingRepository (Repository Pattern).
+ */
+
+const fieldRepository = require('../repositories/FieldRepository');
+const bookingRepository = require('../repositories/BookingRepository');
+const FieldFactory = require('../factories/FieldFactory');
 
 // [Lấy danh sách sân]
 exports.getAllFields = async (req, res) => {
   try {
-    let query = db.collection('fields');
-    
-    if (req.query.sport) {
-      query = query.where('sport', '==', req.query.sport);
-    }
-    if (req.query.active) {
-      query = query.where('active', '==', req.query.active === 'true');
-    }
-    
-    // Limit to 100 by default to prevent large payload
-    const limit = parseInt(req.query.limit) || 100;
-    query = query.limit(limit);
-    
-    const snapshot = await query.get();
-    const fields = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const { sport, active, limit } = req.query;
+    const fields = await fieldRepository.getAll({ sport, active, limit });
     res.json(fields);
   } catch (error) {
     res.status(500).json({ message: 'Lỗi khi lấy danh sách sân', error: error.message });
@@ -27,38 +23,20 @@ exports.getAllFields = async (req, res) => {
 // [Lấy chi tiết sân]
 exports.getFieldById = async (req, res) => {
   try {
-    const doc = await db.collection('fields').doc(req.params.id).get();
-    if (!doc.exists) return res.status(404).json({ message: 'Không tìm thấy sân' });
-    res.json({ id: doc.id, ...doc.data() });
+    const field = await fieldRepository.getById(req.params.id);
+    if (!field) return res.status(404).json({ message: 'Không tìm thấy sân' });
+    res.json(field);
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
 };
 
-// [Thêm sân mới] (Dành cho admin hoặc owner)
+// [Thêm sân mới] - Sử dụng FieldFactory (Factory Pattern)
 exports.createField = async (req, res) => {
   try {
-    const { name, location, address, sport, price, image, images, mapUrl, ownerName, amenities, schedule, active, description } = req.body;
-    const newField = {
-      name: name || '',
-      location: location || '',
-      address: address || location || '',
-      sport: sport || 'Bóng đá',
-      price: price || 0,
-      image: image || '',
-      images: images || [],
-      mapUrl: mapUrl || '',
-      description: description || '',
-      ownerName: ownerName || '',
-      amenities: amenities || [],
-      schedule: schedule || null,
-      active: active !== undefined ? active : true,
-      owner: req.user.uid,
-      bookings: 0,
-      createdAt: new Date().toISOString()
-    };
-    const docRef = await db.collection('fields').add(newField);
-    res.status(201).json({ message: 'Thêm sân thành công', field: { id: docRef.id, ...newField } });
+    const fieldPayload = FieldFactory.createField(req.body, req.user.uid);
+    const createdField = await fieldRepository.create(fieldPayload);
+    res.status(201).json({ message: 'Thêm sân thành công', field: createdField });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi khi tạo sân', error: error.message });
   }
@@ -68,14 +46,13 @@ exports.createField = async (req, res) => {
 exports.updateField = async (req, res) => {
   try {
     const fieldId = req.params.id;
-    const fieldRef = db.collection('fields').doc(fieldId);
-    const fieldDoc = await fieldRef.get();
+    const field = await fieldRepository.getById(fieldId);
 
-    if (!fieldDoc.exists) {
+    if (!field) {
       return res.status(404).json({ message: 'Không tìm thấy sân' });
     }
 
-    if (req.user.role !== 'admin' && fieldDoc.data().owner !== req.user.uid) {
+    if (req.user.role !== 'admin' && field.owner !== req.user.uid) {
       return res.status(403).json({ message: 'Bạn không có quyền sửa sân này' });
     }
 
@@ -92,32 +69,17 @@ exports.updateField = async (req, res) => {
       }
     }
 
-    await fieldRef.update(updates);
-    res.json({ message: 'Cập nhật thành công', field: { id: fieldId, ...updates } });
+    const result = await fieldRepository.update(fieldId, updates);
+    res.json({ message: 'Cập nhật thành công', field: result });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi khi cập nhật', error: error.message });
   }
 };
 
-// [Lấy danh sách các khung giờ đã đặt của một sân] (Public)
+// [Lấy danh sách các khung giờ đã đặt của một sân] (Tối ưu ngày >= hôm nay)
 exports.getFieldBookings = async (req, res) => {
   try {
-    const fieldId = req.params.id;
-    // Lấy các booking của sân này
-    // Ở đây có thể giới hạn ngày tương lai, nhưng để đơn giản ta lấy những booking ko bị huỷ
-    const snapshot = await db.collection('bookings')
-      .where('fieldId', '==', fieldId)
-      .where('status', 'in', ['pending', 'confirmed', 'paid'])
-      .get();
-      
-    const bookings = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        date: data.date,
-        time: data.time
-      };
-    });
-    
+    const bookings = await bookingRepository.getFieldBookings(req.params.id);
     res.json(bookings);
   } catch (error) {
     res.status(500).json({ message: 'Lỗi khi lấy lịch đặt', error: error.message });
@@ -127,50 +89,33 @@ exports.getFieldBookings = async (req, res) => {
 // [Lấy danh sách đánh giá của sân]
 exports.getFieldReviews = async (req, res) => {
   try {
-    const fieldId = req.params.id;
-    const snapshot = await db.collection('reviews')
-      .where('fieldId', '==', fieldId)
-      .get();
-      
-    const reviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    // Sắp xếp giảm dần theo ngày tạo (do firestore where + orderby cần composite index nên sort ở đây)
-    reviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
+    const reviews = await fieldRepository.getReviews(req.params.id);
     res.json(reviews);
   } catch (error) {
     res.status(500).json({ message: 'Lỗi khi lấy đánh giá', error: error.message });
   }
 };
 
-// [Thêm đánh giá]
+// [Thêm đánh giá] (Tối ưu tính rating lũy kế)
 exports.addReview = async (req, res) => {
   try {
-    const fieldId = req.params.id;
     const { rating, comment, customerName } = req.body;
-    
-    const newReview = {
-      fieldId,
+    if (!rating || Number(rating) < 1 || Number(rating) > 5) {
+      return res.status(400).json({ message: 'Điểm đánh giá phải từ 1 đến 5 sao.' });
+    }
+
+    const review = await fieldRepository.addReview(req.params.id, {
       userId: req.user.uid,
-      customerName: customerName || 'Khách hàng',
+      customerName,
       rating: Number(rating),
       comment,
-      createdAt: new Date().toISOString()
-    };
-    
-    const reviewRef = await db.collection('reviews').add(newReview);
-    
-    // Tính lại rating trung bình cho sân
-    const snapshot = await db.collection('reviews').where('fieldId', '==', fieldId).get();
-    const reviews = snapshot.docs.map(d => d.data());
-    const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
-    
-    await db.collection('fields').doc(fieldId).update({
-      rating: avgRating,
-      reviews: reviews.length
     });
-    
-    res.status(201).json({ message: 'Đánh giá thành công', review: { id: reviewRef.id, ...newReview } });
+
+    res.status(201).json({ message: 'Đánh giá thành công', review });
   } catch (error) {
+    if (error.message === 'FIELD_NOT_FOUND') {
+      return res.status(404).json({ message: 'Sân không tồn tại' });
+    }
     res.status(500).json({ message: 'Lỗi khi thêm đánh giá', error: error.message });
   }
 };
@@ -178,87 +123,28 @@ exports.addReview = async (req, res) => {
 // [Kiểm tra user có quyền đánh giá sân không]
 exports.canReview = async (req, res) => {
   try {
-    const fieldId = req.params.id;
-    const userId = req.user.uid;
-
-    const snapshot = await db.collection('bookings')
-      .where('fieldId', '==', fieldId)
-      .where('userId', '==', userId)
-      .where('status', 'in', ['paid', 'confirmed'])
-      .get();
-
-    if (snapshot.empty) {
-      return res.json({ canReview: false });
-    }
-
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-    let hasPassedBooking = false;
-
-    for (const doc of snapshot.docs) {
-      const data = doc.data();
-      const bDate = data.date;
-      
-      if (bDate < todayStr) {
-        hasPassedBooking = true;
-        break;
-      } else if (bDate === todayStr) {
-        const times = data.time.split(',').map(t => t.trim());
-        const lastTime = times[times.length - 1]; // e.g. '17:00 - 18:30'
-        if (lastTime && lastTime.includes('-')) {
-          const endTimeStr = lastTime.split('-')[1].trim(); // '18:30'
-          const [hours, mins] = endTimeStr.split(':').map(Number);
-          const endMinutes = hours * 60 + mins;
-
-          if (currentMinutes >= endMinutes) {
-            hasPassedBooking = true;
-            break;
-          }
-        }
-      }
-    }
-
-    res.json({ canReview: hasPassedBooking });
+    const canReview = await fieldRepository.canUserReview(req.params.id, req.user.uid);
+    res.json({ canReview });
   } catch (error) {
     res.status(500).json({ canReview: false, error: error.message });
   }
 };
 
-// [Xóa sân]
+// [Xóa sân và dữ liệu liên quan]
 exports.deleteField = async (req, res) => {
   try {
     const fieldId = req.params.id;
-    const fieldRef = db.collection('fields').doc(fieldId);
-    const fieldDoc = await fieldRef.get();
+    const field = await fieldRepository.getById(fieldId);
 
-    if (!fieldDoc.exists) {
+    if (!field) {
       return res.status(404).json({ message: 'Không tìm thấy sân' });
     }
 
-    if (req.user.role !== 'admin' && fieldDoc.data().owner !== req.user.uid) {
+    if (req.user.role !== 'admin' && field.owner !== req.user.uid) {
       return res.status(403).json({ message: 'Bạn không có quyền xóa sân này' });
     }
 
-    // Xóa sân
-    await fieldRef.delete();
-
-    // Xóa bookings liên quan
-    const bookingsSnapshot = await db.collection('bookings').where('fieldId', '==', fieldId).get();
-    const batch = db.batch();
-    bookingsSnapshot.forEach(doc => {
-      batch.delete(doc.ref);
-    });
-
-    // Xóa reviews liên quan
-    const reviewsSnapshot = await db.collection('reviews').where('fieldId', '==', fieldId).get();
-    reviewsSnapshot.forEach(doc => {
-      batch.delete(doc.ref);
-    });
-
-    await batch.commit();
-
+    await fieldRepository.delete(fieldId);
     res.json({ message: 'Đã xóa sân và các dữ liệu liên quan' });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi khi xóa', error: error.message });
@@ -270,25 +156,18 @@ exports.replyReview = async (req, res) => {
   try {
     const { id, reviewId } = req.params;
     const { reply } = req.body;
-    
-    const fieldRef = db.collection('fields').doc(id);
-    const fieldDoc = await fieldRef.get();
-    
-    if (!fieldDoc.exists) {
+
+    const field = await fieldRepository.getById(id);
+    if (!field) {
       return res.status(404).json({ message: 'Không tìm thấy sân' });
     }
 
-    if (req.user.role !== 'admin' && fieldDoc.data().owner !== req.user.uid) {
+    if (req.user.role !== 'admin' && field.owner !== req.user.uid) {
       return res.status(403).json({ message: 'Bạn không có quyền phản hồi đánh giá của sân này' });
     }
 
-    const reviewRef = db.collection('reviews').doc(reviewId);
-    await reviewRef.update({
-      ownerReply: reply,
-      repliedAt: new Date().toISOString()
-    });
-
-    res.json({ message: 'Đã phản hồi đánh giá', reply });
+    const result = await fieldRepository.replyReview(reviewId, reply);
+    res.json({ message: 'Đã phản hồi đánh giá', ...result });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
   }

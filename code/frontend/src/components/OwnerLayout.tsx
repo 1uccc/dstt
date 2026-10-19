@@ -26,26 +26,25 @@ const NAV_ITEMS = [
   { to: '/owner/profile', label: 'Hồ sơ', icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
 ];
 
-const OWNER_NOTIF_READ_KEY = 'sportbook-owner-read-notifs';
-
-function getOwnerReadNotifIds(): string[] {
-  try {
-    const raw = localStorage.getItem(OWNER_NOTIF_READ_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
+import { formatTimeAgo } from '../utils/date';
+import { useNotificationSync } from '../hooks/useNotificationSync';
+import { apiClient } from '../utils/apiClient';
+import { NotificationItem } from '../types';
 
 export function OwnerLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
   const [ownerName, setOwnerName] = useState('Chủ sân');
   const [businessName, setBusinessName] = useState('Đơn vị đối tác');
   const [fieldCount, setFieldCount] = useState(0);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setSidebarOpen(false);
+    setShowNotifications(false);
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     try {
@@ -59,7 +58,6 @@ export function OwnerLayout() {
   };
 
   useEffect(() => {
-    // Lấy thông tin session
     const sessionStr = localStorage.getItem('sportbook-session');
     if (!sessionStr) {
       navigate('/auth');
@@ -80,47 +78,21 @@ export function OwnerLayout() {
 
     const fetchFieldsAndProfile = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        // Fetch profile
-        const profileRes = await fetch(`${import.meta.env.VITE_API_URL}/api/users/profile`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (profileRes.ok) {
-          const profile = await profileRes.json();
-          if (profile.businessInfo?.businessName) {
-            setBusinessName(profile.businessInfo.businessName);
-          }
-        }
-
-        // Fetch fields & bookings for notifications
-        const [fieldsRes, bookingsRes] = await Promise.all([
-          fetch(`${import.meta.env.VITE_API_URL}/api/fields`),
-          fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, { headers: { 'Authorization': `Bearer ${token}` } })
+        const [profile, fields] = await Promise.all([
+          apiClient.get<any>('/api/users/profile').catch(() => null),
+          apiClient.get<any[]>('/api/fields').catch(() => []),
         ]);
-        
-        if (fieldsRes.ok) {
-          const fields = await fieldsRes.json();
-          const uid = auth.currentUser?.uid;
-          if (uid) {
-            setFieldCount(fields.filter((f: any) => f.owner === uid).length);
-          }
+
+        if (profile?.businessInfo?.businessName) {
+          setBusinessName(profile.businessInfo.businessName);
         }
 
-        if (bookingsRes.ok) {
-          const bookings = await bookingsRes.json();
-          const readIds = getOwnerReadNotifIds();
-          const pendingBookings = bookings
-            .filter((b: any) => b.status === 'pending')
-            .map((b: any) => ({
-              ...b,
-              read: readIds.includes(b.id || b._id)
-            }));
-          setNotifications(pendingBookings);
+        const uid = auth.currentUser?.uid;
+        if (uid && Array.isArray(fields)) {
+          setFieldCount(fields.filter((f: any) => f.owner === uid).length);
         }
       } catch (err) {
-        console.error(err);
+        console.error('Lỗi lấy thông tin chủ sân:', err);
       }
     };
 
@@ -131,28 +103,46 @@ export function OwnerLayout() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [navigate]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead: handleMarkAllAsRead,
+  } = useNotificationSync({
+    storageKeyPrefix: 'sportbook-owner',
+    fetchNotifications: async (clearedTimestamp, readIds) => {
+      const token = localStorage.getItem('token');
+      if (!token) return [];
 
-  const handleMarkAllAsRead = () => {
-    const currentIds = notifications.map(n => n.id || n._id);
-    try {
-      const existing = getOwnerReadNotifIds();
-      const updated = Array.from(new Set([...existing, ...currentIds]));
-      localStorage.setItem(OWNER_NOTIF_READ_KEY, JSON.stringify(updated));
-    } catch {}
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
+      const bookings = await apiClient.get<any[]>('/api/bookings').catch(() => []);
+      const notifs: NotificationItem[] = [];
+
+      (bookings || [])
+        .filter((b: any) => b.status === 'pending')
+        .forEach((b: any) => {
+          const timestamp = new Date(b.createdAt || Date.now()).getTime();
+          if (timestamp > clearedTimestamp) {
+            const id = b.id || b._id;
+            notifs.push({
+              id,
+              title: `Đơn đặt sân mới từ ${b.customerName || 'Khách hàng'}`,
+              description: `${b.fieldName} · ${b.time} ngày ${b.date}`,
+              time: formatTimeAgo(b.createdAt),
+              timestamp,
+              read: readIds.includes(id),
+              link: '/owner/bookings',
+            });
+          }
+        });
+
+      return notifs;
+    },
+  });
 
   const handleNotificationClick = (notiId: string) => {
-    try {
-      const existing = getOwnerReadNotifIds();
-      if (!existing.includes(notiId)) {
-        localStorage.setItem(OWNER_NOTIF_READ_KEY, JSON.stringify([...existing, notiId]));
-      }
-    } catch {}
-    setNotifications(prev => prev.map(n => (n.id === notiId || n._id === notiId) ? { ...n, read: true } : n));
+    markAsRead(notiId);
     setShowNotifications(false);
   };
 
@@ -278,19 +268,19 @@ export function OwnerLayout() {
                       {notifications.length > 0 ? (
                         notifications.map(noti => (
                           <Link 
-                            key={noti.id || noti._id} 
+                            key={noti.id} 
                             to="/owner/bookings" 
-                            onClick={() => handleNotificationClick(noti.id || noti._id)}
+                            onClick={() => handleNotificationClick(noti.id)}
                             className={`block rounded-xl p-3 transition-colors hover:bg-slate-50 ${noti.read ? 'opacity-70 bg-white' : 'bg-green-50/30'}`}
                           >
                             <div className="flex items-start gap-2">
                               <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${noti.read ? 'bg-slate-300' : 'bg-green-500 ring-2 ring-green-100'}`} />
                               <div>
                                 <p className={`text-sm ${noti.read ? 'font-medium text-slate-700' : 'font-bold text-slate-900'}`}>
-                                  Đơn đặt sân mới từ <span className="text-green-700">{noti.customerName}</span>
+                                  {noti.title}
                                 </p>
                                 <p className="mt-0.5 text-xs text-slate-500">
-                                  {noti.fieldName} · {noti.time} ngày {noti.date}
+                                  {noti.description} · {noti.time}
                                 </p>
                               </div>
                             </div>

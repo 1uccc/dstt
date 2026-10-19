@@ -127,7 +127,7 @@ export function Auth() {
         await syncUserToBackend(token, { email, fullName, role: 'customer', phone });
 
         localStorage.setItem('token', token);
-        localStorage.setItem('sportbook-session', JSON.stringify({ role: 'customer', email, name: fullName }));
+        localStorage.setItem('sportbook-session', JSON.stringify({ role: 'customer', email, name: fullName, phone }));
         userRole = 'customer';
       } else {
         // Đăng nhập
@@ -138,6 +138,7 @@ export function Auth() {
         // Fetch user profile to get role and status
         let role = 'customer';
         let name = user.email;
+        let phone = '';
         let status = 'active';
         try {
           const profileRes = await fetch(`${import.meta.env.VITE_API_URL}/api/users/profile`, {
@@ -147,6 +148,7 @@ export function Auth() {
             const profileData = await profileRes.json();
             if (profileData.role) role = profileData.role;
             if (profileData.fullName) name = profileData.fullName;
+            if (profileData.phone) phone = profileData.phone;
             if (profileData.status) status = profileData.status;
           }
         } catch (err) {
@@ -161,7 +163,7 @@ export function Auth() {
         }
 
         localStorage.setItem('token', token);
-        localStorage.setItem('sportbook-session', JSON.stringify({ role, email, name }));
+        localStorage.setItem('sportbook-session', JSON.stringify({ role, email, name, phone }));
         userRole = role;
       }
       
@@ -192,6 +194,7 @@ export function Auth() {
 
       let role = 'customer';
       let status = 'active';
+      let phone = '';
       try {
         const profileRes = await fetch(`${import.meta.env.VITE_API_URL}/api/users/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -199,6 +202,7 @@ export function Auth() {
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           if (profileData.role) role = profileData.role;
+          if (profileData.phone) phone = profileData.phone;
           if (profileData.status) status = profileData.status;
         }
       } catch (err) {
@@ -213,7 +217,7 @@ export function Auth() {
       }
 
       localStorage.setItem('token', token);
-      localStorage.setItem('sportbook-session', JSON.stringify({ role, email: user.email, name: user.displayName }));
+      localStorage.setItem('sportbook-session', JSON.stringify({ role, email: user.email, name: user.displayName, phone }));
       
       redirectAfterAuth(role);
     } catch (err: any) {
